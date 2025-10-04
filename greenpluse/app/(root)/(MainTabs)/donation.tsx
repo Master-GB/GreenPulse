@@ -51,11 +51,11 @@ export default function Donate() {
           <ArrowLeft size={28} color="white" />
         </TouchableOpacity>
         <Text className="text-white text-2xl font-bold ml-8">Donation</Text>
-        <View className="bg-[#2a3e3e] rounded-full px-3 py-2 flex-row items-center gap-2">
-          <Image source={icons.coinH}  className="size-5 mb-1" />
-          <Text className="text-white font-semibold">120</Text>
-          <Text className="text-gray-400">/15</Text>
-        </View>
+        <TouchableOpacity className='bg-[#2a3e3e] rounded-full px-3 py-2 flex-row items-center gap-2'>
+            <Image source={icons.coinH}  className="size-5 mb-1" />
+            <Text className="text-white font-semibold">120</Text>
+            <Text className="text-gray-400">/5</Text>
+          </TouchableOpacity>
       </View>
 
       <ScrollView className="flex-1" showsVerticalScrollIndicator={false}>
@@ -125,7 +125,7 @@ export default function Donate() {
                   <Text className="text-black text-4xl font-bold">60</Text>
                 </View>
                 <Text className="text-gray-300 text-sm text-center">
-                  Credits donated in{'\n'}total
+                  Coin donated in{'\n'}total
                 </Text>
               </View>
 
