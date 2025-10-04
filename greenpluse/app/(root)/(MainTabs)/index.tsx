@@ -1,18 +1,10 @@
-
-import {
-  View,
-  Text,
-  ScrollView,
-  TouchableOpacity,
-  Image,
-  StatusBar,
-  ImageBackground
-} from 'react-native';
+import React from 'react';
+import { View, Text, ScrollView, TouchableOpacity, Image, FlatList, StatusBar, ImageBackground } from 'react-native';
+import { useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import {
   Home as HomeIcon,
   Zap,
-  TrendingUp,
   Leaf,
   HelpCircle,
   BookOpen,
@@ -23,6 +15,7 @@ import { images } from '@/constants/images'
 import { icons } from '@/constants/icons';
 
 export default function Home() {
+  const router = useRouter();
   return (
     <SafeAreaView className="flex-1 bg-[#122119]">
       <StatusBar barStyle="light-content" />
@@ -86,7 +79,10 @@ export default function Home() {
               <Text className="text-gray-300 text-sm mb-3">
                 3,450 / 5,000 kWh contributed
               </Text>
-              <TouchableOpacity className="bg-[#1AE57D] rounded-full py-3 w-full max-w-[190px]">
+              <TouchableOpacity 
+                className="bg-[#1AE57D] rounded-full py-3 w-full max-w-[190px]"
+                onPress={() => router.push('/(root)/donateNow')}
+              >
                 <Text className="text-center text-black font-bold text-base">
                   Contribute Now
                 </Text>
@@ -99,32 +95,30 @@ export default function Home() {
         <View className="mx-4 mb-6">
           <Text className="text-white text-xl font-bold mb-4">Quick Actions</Text>
           
-          <View className="flex-row gap-3 mb-3">
-            <TouchableOpacity className="flex-1 bg-[#2a3e3e] rounded-2xl  items-center justify-center h-28">
-            
-                <Image source={icons.donateH}  className="size-12  mb-1" />
-         
-              <Text className="text-white text-center text-sm whitespace-nowrap">
-                Donate Energy
-              </Text>
+          <View className="flex-row justify-between w-full">
+            <TouchableOpacity className="w-[31%] bg-[#2a3e3e] rounded-2xl items-center justify-center h-28">
+                <Image source={icons.donateH} className="size-12 mb-1" />
+                <Text className="text-white text-center text-sm">
+                    Donate Energy
+                </Text>
             </TouchableOpacity>
 
-            <TouchableOpacity className="flex-1 bg-[#2a3e3e] rounded-2xl p-4 items-center justify-center h-28">
-                 <Image source={icons.supportH}  className="size-12 mb-1" />
-              <Text className="text-white text-center text-sm">
-                Request Help
-              </Text>
+            <TouchableOpacity className="w-[31%] bg-[#2a3e3e] rounded-2xl items-center justify-center h-28">
+                <Image source={icons.supportH} className="size-12 mb-1" />
+                <Text className="text-white text-center text-sm">
+                    Request Help
+                </Text>
             </TouchableOpacity>
 
-            <TouchableOpacity className="flex-1 bg-[#2a3e3e] rounded-2xl p-4 items-center justify-center h-28">
-              <Image source={icons.impactH}  className="size-12 mb-1" />
+            <TouchableOpacity className="w-[31%] bg-[#2a3e3e] rounded-2xl items-center justify-center h-28">
+                <Image source={icons.impactH} className="size-12 mb-1" />
               <Text className="text-white text-center text-sm">
                 View Impact
               </Text>
             </TouchableOpacity>
           </View>
 
-          <View className="flex-row gap-3">
+          <View className="flex-row gap-3 mt-3">
             <TouchableOpacity className="flex-[1.5] bg-[#2a3e3e] rounded-2xl  items-center justify-center h-28">
                <Image source={icons.trackH}  className="size-12 mb-1" />
               <Text className="text-white text-center text-sm">
