@@ -96,7 +96,11 @@ export default function Home() {
           <Text className="text-white text-xl font-bold mb-4">Quick Actions</Text>
           
           <View className="flex-row justify-between w-full">
-            <TouchableOpacity className="w-[31%] bg-[#2a3e3e] rounded-2xl items-center justify-center h-28">
+            <TouchableOpacity 
+            className="w-[31%] bg-[#2a3e3e] rounded-2xl items-center justify-center h-28"
+             onPress={() => router.push('/(root)/(MainTabs)/donation')}
+            
+            >
                 <Image source={icons.donateH} className="size-12 mb-1" />
                 <Text className="text-white text-center text-sm">
                     Donate Energy
@@ -110,7 +114,10 @@ export default function Home() {
                 </Text>
             </TouchableOpacity>
 
-            <TouchableOpacity className="w-[31%] bg-[#2a3e3e] rounded-2xl items-center justify-center h-28">
+            <TouchableOpacity 
+            className="w-[31%] bg-[#2a3e3e] rounded-2xl items-center justify-center h-28"
+             onPress={() => router.push('/(root)/impact')}
+            >
                 <Image source={icons.impactH} className="size-12 mb-1" />
               <Text className="text-white text-center text-sm">
                 View Impact

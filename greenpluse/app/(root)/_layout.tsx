@@ -19,9 +19,19 @@ function DonateHeader() {
 
 export default function RootLayout() {
   return (
-    <>
-      <StatusBar hidden={true} />
-      <Stack>
+    <View style={{ flex: 1, backgroundColor: '#122119' }}>
+      <StatusBar hidden={true} backgroundColor="#122119" />
+      <Stack
+        screenOptions={{
+          contentStyle: { backgroundColor: '#122119' },
+          animation: 'slide_from_right',
+          // Add these to prevent white flash
+          headerTransparent: false,
+          headerStyle: {
+            backgroundColor: "#122119",
+          },
+        }}
+      >
         <Stack.Screen name="(MainTabs)" options={{ headerShown: false }} />
 
         <Stack.Screen
@@ -33,11 +43,73 @@ export default function RootLayout() {
               backgroundColor: "#122119",
             },
             headerTintColor: "#fff",
+            animation: 'slide_from_right',
+            gestureEnabled: true,
+            fullScreenGestureEnabled: true,
+            contentStyle: { backgroundColor: '#122119' },
+            presentation: 'card',
+            headerShadowVisible: false,
+            headerTransparent: false, // Important: set to false
+            headerBackground: () => (
+              <View style={{ flex: 1, backgroundColor: '#122119' }} />
+            ),
+            // Add this to handle the transition better
+            animationTypeForReplace: 'push',
           }}
         />
 
+        <Stack.Screen
+          name="impact"
+          options={{
+            headerShown: true,
+            headerTitle: () => <DonateHeader />,
+            headerStyle: {
+              backgroundColor: "#122119",
+            },
+            headerTintColor: "#fff",
+            animation: 'slide_from_right',
+            gestureEnabled: true,
+            fullScreenGestureEnabled: true,
+            contentStyle: { backgroundColor: '#122119' },
+            presentation: 'card',
+            headerShadowVisible: false,
+            headerTransparent: false, // Important: set to false
+            headerBackground: () => (
+              <View style={{ flex: 1, backgroundColor: '#122119' }} />
+            ),
+            // Add this to handle the transition better
+            animationTypeForReplace: 'push',
+          }}
+        />
+
+        <Stack.Screen
+          name="wallet"
+          options={{
+            headerShown: true,
+            headerTitle: () => <DonateHeader />,
+            headerStyle: {
+              backgroundColor: "#122119",
+            },
+            headerTintColor: "#fff",
+            animation: 'slide_from_right',
+            gestureEnabled: true,
+            fullScreenGestureEnabled: true,
+            contentStyle: { backgroundColor: '#122119' },
+            presentation: 'card',
+            headerShadowVisible: false,
+            headerTransparent: false, // Important: set to false
+            headerBackground: () => (
+              <View style={{ flex: 1, backgroundColor: '#122119' }} />
+            ),
+            // Add this to handle the transition better
+            animationTypeForReplace: 'push',
+          }}
+        />
+
+
+
         <Stack.Screen name="signIn" options={{ headerShown: false }} />
       </Stack>
-    </>
+    </View>
   );
 }
