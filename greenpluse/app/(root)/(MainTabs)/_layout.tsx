@@ -24,112 +24,89 @@ const TabIcon = ({focused,icon,text}:any) =>{
             <Image source={icon} tintColor="#ffffff" className="size-6 " />
         </View>
     )
-      
 
 }
 
 const TabsLayout = () => {
   return (
-    <Tabs
-      screenOptions={{
-        tabBarShowLabel:false,
-        tabBarItemStyle : {
-        width:"100%",
-        height:"100%",
-        justifyContent:"center",
-        alignItems:"center",
-      },
-      tabBarStyle: {
-        backgroundColor: "#193326",
-        height: 50,
-        position: "absolute",
-        overflow: "hidden",
-        borderWidth: 1,
-        borderColor: "#0F0D23",
-      },
+    <View style={{ flex: 1, backgroundColor: '#122119' }}>
+      <Tabs
+        screenOptions={{
+          tabBarShowLabel: false,
+          tabBarItemStyle: {
+            width: '100%',
+            height: '100%',
+            justifyContent: 'center',
+            alignItems: 'center',
+          },
+          tabBarStyle: {
+            backgroundColor: '#193326',
+            height: 50,
+            position: 'absolute',
+            overflow: 'hidden',
+            borderWidth: 1,
+            borderColor: '#0F0D23',
+          },
+        }}
+      >
+        <Tabs.Screen
+          name="index"
+          options={{
+            title: 'Home',
+            headerShown: false,
+            tabBarIcon: ({ focused }) => (
+              <TabIcon focused={focused} icon={icons.home} text="Home" />
+            ),
+          }}
+        />
 
-    }}>
       <Tabs.Screen
-         name="index"
-         options={{
-            title : "Home" ,
-            headerShown : false, 
-            tabBarIcon:({focused}) => (
-                <TabIcon  
-                   focused = {focused} 
-                   icon = {icons.home} 
-                   text ="Home"
-                />
-            )   
+        name="donation"
+        options={{
+          title: 'Donate',
+          headerShown: false,
+          tabBarIcon: ({ focused }) => (
+            <TabIcon focused={focused} icon={icons.donate_n} text="Donate" />
+          ),
         }}
       />
 
       <Tabs.Screen
-         name="donation"
-         options={{
-            title : "Donate" ,
-            headerShown : false, 
-            tabBarIcon:({focused}) => (
-                <TabIcon  
-                   focused = {focused} 
-                   icon = {icons.donate_n} 
-                   text ="Donate"
-                />
-            )      
+        name="project"
+        options={{
+          title: 'Project',
+          headerShown: false,
+          tabBarIcon: ({ focused }) => (
+            <TabIcon focused={focused} icon={icons.project} text="Project" />
+          ),
         }}
-      
       />
 
       <Tabs.Screen
-         name="project"
-         options={{
-            title : "Project" ,
-            headerShown : false, 
-            tabBarIcon:({focused}) => (
-                <TabIcon  
-                   focused = {focused} 
-                   icon = {icons.project} 
-                   text ="Project"
-                />
-            )      
+        name="trackEnergy"
+        options={{
+          title: 'Track',
+          headerShown: false,
+          tabBarIcon: ({ focused }) => (
+            <TabIcon focused={focused} icon={icons.track} text="Track" />
+          ),
         }}
-      
       />
 
       <Tabs.Screen
-         name="trackEnergy"
-         options={{
-            title : "Track" ,
-            headerShown : false, 
-            tabBarIcon:({focused}) => (
-                <TabIcon  
-                   focused = {focused} 
-                   icon = {icons.track} 
-                   text ="Track"
-                />
-            )      
+        name="profile"
+        options={{
+          title: 'Profile',
+          headerShown: false,
+          tabBarIcon: ({ focused }) => (
+            <TabIcon focused={focused} icon={icons.profile} text="Profile" />
+          ),
         }}
-      
-      />
-
-      <Tabs.Screen
-         name="profile"
-         options={{
-            title : "Profile" ,
-            headerShown : false, 
-            tabBarIcon:({focused}) => (
-                <TabIcon  
-                   focused = {focused} 
-                   icon = {icons.profile} 
-                   text ="Profile"
-                />
-            )      
-        }}
-      
       />
 
 
-    </Tabs>
+      </Tabs>
+    </View>
   )
 }
 

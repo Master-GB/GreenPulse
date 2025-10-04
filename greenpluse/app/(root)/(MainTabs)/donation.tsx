@@ -9,6 +9,7 @@ import {
   Animated
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { useRouter } from 'expo-router';
 import {
   ArrowLeft,
   Coins,
@@ -21,6 +22,7 @@ import {
 import { icons } from '@/constants/icons';
 
 export default function Donate() {
+  const router = useRouter();
   const monthlyData = [
     { month: 'Jan', value: 72 },
     { month: 'Feb', value: 45 },
@@ -102,7 +104,10 @@ export default function Donate() {
               </Text>
             </View>
 
-            <TouchableOpacity className="bg-[#1AE57D] rounded-full py-3">
+            <TouchableOpacity 
+            className="bg-[#1AE57D] rounded-full py-3"
+             onPress={() => router.push('/(root)/donateNow')}
+            >
               <Text className="text-center text-black font-bold text-lg">
                 Donate Now
               </Text>
