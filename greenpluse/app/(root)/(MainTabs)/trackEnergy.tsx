@@ -1,5 +1,6 @@
 import React from 'react'
-import { View, Text, ScrollView } from 'react-native'
+import { View, Text, ScrollView, Dimensions } from 'react-native'
+import { BarChart, LineChart } from 'react-native-chart-kit'
 
 // Pixel-approximate Track Energy screen using nativewind/tailwind classes
 export default function TrackEnergy() {
@@ -29,26 +30,38 @@ export default function TrackEnergy() {
         <Text className="text-white text-4xl font-extrabold mt-2">19456 kWh</Text>
       </View>
 
-      {/* Bar chart placeholder */}
-      <View className="h-56 bg-transparent mb-6 justify-end">
-        <View className="flex-row items-end justify-between h-full">
-          <View className="items-center">
-            <View className="w-6 bg-[#0fd56b] rounded-t-xl h-12" />
-            <Text className="text-gray-400 text-xs mt-2">05</Text>
-          </View>
-          <View className="items-center">
-            <View className="w-6 bg-[#0fd56b] rounded-t-xl h-28" />
-            <Text className="text-gray-400 text-xs mt-2">06</Text>
-          </View>
-          <View className="items-center">
-            <View className="w-6 bg-[#0fd56b] rounded-t-xl h-40" />
-            <Text className="text-gray-400 text-xs mt-2">07</Text>
-          </View>
-          <View className="items-center">
-            <View className="w-6 bg-[#0fd56b] rounded-t-xl h-28" />
-            <Text className="text-gray-400 text-xs mt-2">08</Text>
-          </View>
-        </View>
+      {/* Bar chart (react-native-chart-kit) */}
+      <View className="mb-6">
+        <BarChart
+          data={{
+            labels: ['05', '06', '07', '08'],
+            datasets: [{ data: [30, 50, 90, 50] }],
+          }}
+          width={Dimensions.get('window').width - 48} // padding compensation
+          height={220}
+          yAxisLabel=""
+          yAxisSuffix=""
+          withInnerLines={true}
+          chartConfig={{
+            backgroundColor: '#122119',
+            backgroundGradientFrom: '#122119',
+            backgroundGradientTo: '#122119',
+            decimalPlaces: 0,
+            // bright green for bars and labels
+            color: (opacity = 1) => `rgba(19,240,122, ${opacity})`,
+            labelColor: (opacity = 1) => `rgba(255,255,255, ${opacity})`,
+            propsForBackgroundLines: { stroke: '#183226' },
+            // make them bars bright green
+            fillShadowGradient: '#13f07a',
+            fillShadowGradientOpacity: 1,
+          }}
+          style={{
+            marginVertical: 8,
+            borderRadius: 8,
+          }}
+          showBarTops={false}
+          fromZero
+        />
       </View>
 
       {/* Weekly Average */}
@@ -59,17 +72,17 @@ export default function TrackEnergy() {
 
       {/* Most frequently used components */}
       <View className="mb-6">
-        <Text className="text-white font-semibold mb-3">Most frequently used components</Text>
+        <Text className="text-white font-semibold mb-4">Most frequently used components</Text>
 
         {[
           { name: 'Air Conditioner', pct: 0.9 },
           { name: 'Printer', pct: 0.65 },
           { name: 'PC', pct: 0.5 },
         ].map((c) => (
-          <View key={c.name} className="mb-3">
-            <Text className="text-white mb-2">{c.name}</Text>
-            <View className="h-4 bg-transparent border border-[#27433a] rounded-full overflow-hidden">
-              <View className="h-4 rounded-full bg-[#13f07a]" style={{ width: `${c.pct * 100}%` }} />
+          <View key={c.name} className="flex-row items-center justify-between mb-4">
+            <Text className="text-white text-base">{c.name}</Text>
+            <View className="w-1/2 h-8 rounded-full border" style={{ borderColor: '#2b6b66', padding: 4 }}>
+              <View className="h-full rounded-full" style={{ backgroundColor: '#13f07a', width: `${c.pct * 100}%` }} />
             </View>
           </View>
         ))}
@@ -81,14 +94,31 @@ export default function TrackEnergy() {
         <Text className="text-white text-3xl font-extrabold mt-2">250 Coins</Text>
       </View>
 
-      {/* Line chart placeholder */}
+      {/* Line chart (react-native-chart-kit) */}
       <View className="mb-6">
-        <View className="h-44 bg-transparent">
-          {/* Simple line chart points using absolute Views would need more complex layout; use placeholders */}
-          <View className="flex-1 justify-center items-center">
-            <Text className="text-gray-400">[line chart placeholder]</Text>
-          </View>
-        </View>
+        <LineChart
+          data={{
+            labels: ['05', '06', '07', '08', '09', '10'],
+            datasets: [{ data: [34, 67, 55, 78, 76, 55] }],
+          }}
+          width={Dimensions.get('window').width - 48}
+          height={180}
+          yAxisLabel=""
+          yAxisSuffix=""
+          chartConfig={{
+            backgroundColor: '#122119',
+            backgroundGradientFrom: '#122119',
+            backgroundGradientTo: '#122119',
+            decimalPlaces: 0,
+            color: (opacity = 1) => `rgba(19,240,122, ${opacity})`,
+            labelColor: (opacity = 1) => `rgba(255,255,255, ${opacity})`,
+            propsForDots: { r: '4', strokeWidth: '2', stroke: '#13f07a', fill: '#13f07a' },
+            propsForBackgroundLines: { stroke: '#183226' },
+          }}
+          bezier
+          style={{ borderRadius: 8 }}
+          withDots
+        />
       </View>
 
       {/* Renewable sources progress */}
@@ -98,10 +128,10 @@ export default function TrackEnergy() {
           { name: 'Wind turbine', pct: 0.6 },
           { name: 'Generator', pct: 0.45 },
         ].map((r) => (
-          <View key={r.name} className="mb-4">
-            <Text className="text-white mb-2">{r.name}</Text>
-            <View className="h-4 bg-transparent border border-[#27433a] rounded-full overflow-hidden">
-              <View className="h-4 rounded-full bg-[#13f07a]" style={{ width: `${r.pct * 100}%` }} />
+          <View key={r.name} className="flex-row items-center justify-between mb-4">
+            <Text className="text-white text-base">{r.name}</Text>
+            <View className="w-1/2 h-8 rounded-full border" style={{ borderColor: '#2b6b66', padding: 4 }}>
+              <View className="h-full rounded-full" style={{ backgroundColor: '#13f07a', width: `${r.pct * 100}%` }} />
             </View>
           </View>
         ))}
