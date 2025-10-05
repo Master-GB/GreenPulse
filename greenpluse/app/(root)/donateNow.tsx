@@ -18,6 +18,9 @@ import {
   Search,
   Check,
   Lightbulb,
+  Users,
+  Shuffle,
+  UserPlus,
 } from "lucide-react-native";
 import Slider from "@react-native-community/slider";
 import { images } from '@/constants/images'
@@ -118,7 +121,7 @@ export default function DonateNow() {
   };
 
   return (
-    <View className="flex-1 bg-[#122119] pt-1">
+    <View className="flex-1 bg-[#122119]">
       <StatusBar 
         barStyle="light-content"
         backgroundColor="#122119"
@@ -126,23 +129,23 @@ export default function DonateNow() {
       />
       <ScrollView
         className="flex-1"
-        style={{ backgroundColor: '#122119' }}
         contentContainerStyle={{
-          paddingHorizontal: 20,
-          paddingTop: 10,
+          paddingLeft: 15,
+          paddingRight: 15,
           paddingBottom: 120,
+          paddingTop :1
         }}
         showsVerticalScrollIndicator={false}
-        scrollEventThrottle={16}
       >
-        {/* Choose Amount to Donate */}
-        <View className="mt-[-3px] mb-3">
-          <Text className="text-white text-xl font-bold mb-2">
-            Choose Amount to Donate
-          </Text>
+        {/* Donation Amount Section */}
+        <View className="rounded px-6 py-4 border border-[#2a4a3a]  mx-1">
+          <View className="flex-row items-center mb-[-7px] ml-[-15px]">
+            <Coins size={24} color="#2ECC71" className="mr-2" />
+            <Text className="text-white text-xl font-bold ml-2">Choose Amount to Donate</Text>
+          </View>
 
           {/* Amount Display with +/- buttons */}
-          <View className="flex-row items-center justify-center mb-2 mt-2">
+          <View className="flex-row items-center justify-center  mt-2">
             <TouchableOpacity
               className="bg-white rounded-full w-16 h-16 items-center justify-center"
               onPress={() => setCoinAmount(Math.max(1, coinAmount - 1))}
@@ -222,73 +225,68 @@ export default function DonateNow() {
           </Text>
         </View>
 
-        {/* Horizontal Separator */}
-        <View className="h-[1px] bg-gray-700 my-3 mx-1 mb-4" />
+        {/* Beneficiary Type Section */}
+        <View className="rounded px-6 py-4 border border-[#2a4a3a]  mx-1 mb-6">
+          <View className="flex-row items-center mb-4 ml-[-15px]">
+            <Users size={24} color="#2ECC71" className="mr-3" />
+            <Text className="text-white text-xl font-bold ml-2">Choose Beneficiary Type</Text>
+          </View>
 
-        {/* Choose Beneficiary Type */}
-        <View className="mb-8">
-          <Text className="text-white text-xl font-bold mb-3">
-            Choose Beneficiary Type
-          </Text>
-
-          {/* Auto-Allocate Option */}
-          <TouchableOpacity
-            className={`border-2 rounded-3xl pt-2 pb-2 pl-3 pr-2 mb-4 ${
-              selectedOption === "auto"
-                ? "border-emerald-500 bg-[#1C3528]"
-                : "border-gray-600 bg-transparent"
-            }`}
-            onPress={() => setSelectedOption("auto")}
-          >
-            <View className="flex-row items-start gap-3">
-              <View
-                className={`w-6 h-6 rounded-full border-2 items-center justify-center mt-1 ${
-                  selectedOption === "auto"
-                    ? "border-emerald-500 bg-emerald-500"
-                    : "border-gray-500 bg-transparent"
-                }`}
-              >
-                {selectedOption === "auto" && (
-                  <View className="w-3 h-3 rounded-full bg-white" />
+          <View className="space-y-4">
+            {/* Auto Donation Option */}
+            <TouchableOpacity 
+              className={`mb-3 px-4 py-2 rounded-xl border-2 ${
+                selectedOption === 'auto' 
+                  ? 'border-[#2ECC71] bg-[#1e3a3a]' 
+                  : 'border-[#2d4a4a]'
+              }`}
+              onPress={() => setSelectedOption('auto')}
+            >
+              <View className="flex-row items-center">
+                <View className="mr-3 p-2 bg-[#2d4a4a] rounded-lg">
+                  <Shuffle size={20} color="#2ECC71" />
+                </View>
+                <View className="flex-1">
+                  <Text className="text-white font-semibold text-base">Auto Donate</Text>
+                  <Text className="text-gray-400 text-sm mt-1">
+                    Let us distribute your donation optimally
+                  </Text>
+                </View>
+                {selectedOption === 'auto' && (
+                  <View className="w-6 h-6 rounded-full bg-[#2ECC71] items-center justify-center">
+                    <Check size={16} color="white" />
+                  </View>
                 )}
               </View>
-              <View className="flex-1">
-                <Text className="text-white text-lg font-bold mb-1">
-                  Auto-Allocate (Recommended)
-                </Text>
-                <Text className="text-gray-400 text-sm leading-5">
-                  System will distribute fairly to the most vulnerable households
-                </Text>
-              </View>
-            </View>
-          </TouchableOpacity>
+            </TouchableOpacity>
 
-          {/* Choose Beneficiary Option */}
-          <TouchableOpacity
-            className={`border-2 rounded-3xl pt-7 pb-7 pl-3 pr-2 ${
-              selectedOption === "manual"
-                ? "border-emerald-500 bg-[#1C3528]"
-                : "border-gray-600 bg-transparent"
-            }`}
-            onPress={() => setSelectedOption("manual")}
-          >
-            <View className="flex-row items-center gap-3">
-              <View
-                className={`w-6 h-6 rounded-full border-2 items-center justify-center ${
-                  selectedOption === "manual"
-                    ? "border-emerald-500 bg-emerald-500"
-                    : "border-gray-500 bg-transparent"
-                }`}
-              >
-                {selectedOption === "manual" && (
-                  <View className="w-3 h-3 rounded-full bg-white" />
+            {/* Manual Donation Option */}
+            <TouchableOpacity 
+              className={`px-4 py-4 rounded-xl border-2 ${
+                selectedOption === 'manual' 
+                  ? 'border-[#2ECC71] bg-[#1e3a3a]' 
+                  : 'border-[#2d4a4a]'
+              }`}
+              onPress={() => setSelectedOption('manual')}
+            >
+              <View className="flex-row items-center">
+                <View className="mr-3 p-2 bg-[#2d4a4a] rounded-lg">
+                  <UserPlus size={20} color="#2ECC71" />
+                </View>
+                <View className="flex-1">
+                  <Text className="text-white font-semibold text-base">Choose Manually</Text>
+                  <Text className="text-gray-400 text-sm mt-1">
+                    Select specific beneficiaries
+                  </Text>
+                </View>
+                {selectedOption === 'manual' && (
+                  <View className="w-6 h-6 rounded-full bg-[#2ECC71] items-center justify-center">
+                    <Check size={16} color="white" />
+                  </View>
                 )}
               </View>
-              <Text className="text-white text-lg font-bold">
-                Choose Beneficiary
-              </Text>
-            </View>
-          </TouchableOpacity>
+            </TouchableOpacity>
+          </View>
 
           {/* Search Input (shown when manual is selected) */}
           {selectedOption === "manual" && (
@@ -305,8 +303,10 @@ export default function DonateNow() {
           )}
         </View>
 
-        {/* Horizontal Separator */}
-        <View className="h-[1px] bg-gray-700 my-6 mx-1 mt-[-15px] mb-4" />
+        {/* Horizontal Divider */}
+        <View className="h-[2px] bg-gray-700 my-4 mx-1 mt-[-8px]">
+          <View className="h-[1px] bg-[#2a4a3a] w-full" />
+        </View>
 
         {/* Conversation Info */}
         <View className="mb-[-30px]">
