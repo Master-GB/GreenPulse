@@ -1,18 +1,20 @@
 import { Stack } from "expo-router";
 import { StatusBar, View, Text, TouchableOpacity, Image } from "react-native";
-import { Coins } from "lucide-react-native";
 import { icons } from "@/constants/icons";
 
-// Custom header component for the Donate Energy screen
-function DonateHeader() {
+// Reusable header that accepts a dynamic title
+type HeaderProps = { title: string };
+function AppHeader({ title }: HeaderProps) {
   return (
-    <View className="flex-row justify-between items-center w-full px-7">
-      <Text className="text-white text-2xl font-bold mr-4">Donate Energy</Text>
-      <TouchableOpacity className="bg-[#2a3e3e] rounded-full px-5 py-2 flex-row items-center gap-1 ml-2">
-        <Image source={icons.coinH} className="size-5 mb-1" />
+    <View className="flex-1 flex-row items-center px-2 mb-2">
+      <View className="absolute left-0 right-16 items-center">
+        <Text className="text-white text-2xl font-bold">{title}</Text>
+      </View>
+      <View className="ml-52 bg-[#2a3e3e] rounded-full px-4 py-2.5 flex-row items-center gap-1 ">
+        <Image source={icons.coinH} className="w-5 h-5" />
         <Text className="text-white font-semibold">120</Text>
-        <Text className="text-gray-400">/5</Text>
-      </TouchableOpacity>
+        <Text className="text-gray-400 text-sm">/5</Text>
+      </View>
     </View>
   );
 }
@@ -25,7 +27,6 @@ export default function RootLayout() {
         screenOptions={{
           contentStyle: { backgroundColor: '#122119' },
           animation: 'slide_from_right',
-          // Add these to prevent white flash
           headerTransparent: false,
           headerStyle: {
             backgroundColor: "#122119",
@@ -38,7 +39,7 @@ export default function RootLayout() {
           name="donateNow"
           options={{
             headerShown: true,
-            headerTitle: () => <DonateHeader />,
+            headerTitle: () => <AppHeader title="Donate Energy" />,
             headerStyle: {
               backgroundColor: "#122119",
             },
@@ -49,11 +50,10 @@ export default function RootLayout() {
             contentStyle: { backgroundColor: '#122119' },
             presentation: 'card',
             headerShadowVisible: false,
-            headerTransparent: false, // Important: set to false
+            headerTransparent: false,
             headerBackground: () => (
               <View style={{ flex: 1, backgroundColor: '#122119' }} />
             ),
-            // Add this to handle the transition better
             animationTypeForReplace: 'push',
           }}
         />
@@ -62,7 +62,7 @@ export default function RootLayout() {
           name="impact"
           options={{
             headerShown: true,
-            headerTitle: () => <DonateHeader />,
+            headerTitle: () => <AppHeader title="My Impact" />,
             headerStyle: {
               backgroundColor: "#122119",
             },
@@ -73,11 +73,33 @@ export default function RootLayout() {
             contentStyle: { backgroundColor: '#122119' },
             presentation: 'card',
             headerShadowVisible: false,
-            headerTransparent: false, // Important: set to false
+            headerTransparent: false,
             headerBackground: () => (
               <View style={{ flex: 1, backgroundColor: '#122119' }} />
             ),
-            // Add this to handle the transition better
+            animationTypeForReplace: 'push',
+          }}
+        />
+
+        <Stack.Screen
+          name="stories/[id]"
+          options={{
+            headerShown: true,
+            headerTitle: () => <AppHeader title="Impact Story" />,
+            headerStyle: {
+              backgroundColor: "#122119",
+            },
+            headerTintColor: "#fff",
+            animation: 'slide_from_right',
+            gestureEnabled: true,
+            fullScreenGestureEnabled: true,
+            contentStyle: { backgroundColor: '#122119' },
+            presentation: 'card',
+            headerShadowVisible: false,
+            headerTransparent: false,
+            headerBackground: () => (
+              <View style={{ flex: 1, backgroundColor: '#122119' }} />
+            ),
             animationTypeForReplace: 'push',
           }}
         />
@@ -86,7 +108,7 @@ export default function RootLayout() {
           name="wallet"
           options={{
             headerShown: true,
-            headerTitle: () => <DonateHeader />,
+            headerTitle: () => <AppHeader title="Wallet" />,
             headerStyle: {
               backgroundColor: "#122119",
             },
@@ -97,16 +119,13 @@ export default function RootLayout() {
             contentStyle: { backgroundColor: '#122119' },
             presentation: 'card',
             headerShadowVisible: false,
-            headerTransparent: false, // Important: set to false
+            headerTransparent: false,
             headerBackground: () => (
               <View style={{ flex: 1, backgroundColor: '#122119' }} />
             ),
-            // Add this to handle the transition better
             animationTypeForReplace: 'push',
           }}
         />
-
-
 
         <Stack.Screen name="signIn" options={{ headerShown: false }} />
       </Stack>
