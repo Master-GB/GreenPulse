@@ -451,7 +451,7 @@ export default function DonateNow() {
                     {
                       scale: glowAnim.interpolate({
                         inputRange: [0, 1],
-                        outputRange: [1, 2.2],
+                        outputRange: [1, 2],
                       }),
                     },
                   ],
