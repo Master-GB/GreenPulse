@@ -31,7 +31,10 @@ export default function Home() {
               <Text className="text-white text-xs font-bold">3</Text>
             </View>
           </View>
-          <TouchableOpacity className='bg-[#2a3e3e] rounded-full px-3 py-2 flex-row items-center gap-2 mb-2'>
+          <TouchableOpacity 
+          className='bg-[#2a3e3e] rounded-full px-3 py-2 flex-row items-center gap-2 mb-2'
+          onPress={() => router.push('/(root)/wallet')}
+          >
             <Image source={icons.coinH}  className="size-5 mb-1" />
             <Text className="text-white font-semibold">120</Text>
             <Text className="text-gray-400">/5</Text>
