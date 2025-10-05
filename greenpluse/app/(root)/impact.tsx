@@ -73,7 +73,7 @@ export default function Impact() {
 
   const handleShareImpact = async () => {
     try {
-      if (viewShotRef.current) {
+      if (viewShotRef.current && viewShotRef.current.capture) {
         const uri = await viewShotRef.current.capture();
         
         if (await Sharing.isAvailableAsync()) {
@@ -139,7 +139,7 @@ export default function Impact() {
             {/* Second Row */}
             <View className="flex-row mt-3">
               {/* Clean Energy Generated */}
-              <View className="flex-1 mr-2 bg-[#1a4d3a] rounded-2xl p-4">
+              <View className="flex-1 mr-2 bg-[#1a4d3a] rounded-2xl py-6 pl-3">
                 <Text className="text-gray-300 text-sm mb-1">
                   Helped Project
                 </Text>

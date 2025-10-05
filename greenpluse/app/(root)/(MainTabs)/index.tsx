@@ -31,7 +31,7 @@ export default function Home() {
               <Text className="text-white text-xs font-bold">3</Text>
             </View>
           </View>
-          <TouchableOpacity className='bg-[#2a3e3e] rounded-full px-3 py-2 flex-row items-center gap-2'>
+          <TouchableOpacity className='bg-[#2a3e3e] rounded-full px-3 py-2 flex-row items-center gap-2 mb-2'>
             <Image source={icons.coinH}  className="size-5 mb-1" />
             <Text className="text-white font-semibold">120</Text>
             <Text className="text-gray-400">/5</Text>
@@ -146,8 +146,8 @@ export default function Home() {
         <View className="mx-4 mb-[45px]">
           <View className="flex-row justify-between items-center mb-4">
             <Text className="text-white text-xl font-bold">Impact Stories</Text>
-            <TouchableOpacity>
-              <Text className="text-emerald-500 font-semibold">View All</Text>
+            <TouchableOpacity onPress={() => router.push('/(root)/impact')}>
+              <Text className="text-emerald-500 font-semibold">View Impact</Text>
             </TouchableOpacity>
           </View>
 
