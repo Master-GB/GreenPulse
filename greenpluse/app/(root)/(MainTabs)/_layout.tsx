@@ -104,6 +104,9 @@ const TabsLayout = () => {
         }}
       />
 
+      
+
+      
 
       </Tabs>
     </View>
