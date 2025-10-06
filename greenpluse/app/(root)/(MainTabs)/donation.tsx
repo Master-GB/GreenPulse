@@ -9,6 +9,7 @@ import {
   Animated
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { useRouter } from 'expo-router';
 import {
   ArrowLeft,
   Coins,
@@ -21,6 +22,7 @@ import {
 import { icons } from '@/constants/icons';
 
 export default function Donate() {
+  const router = useRouter();
   const monthlyData = [
     { month: 'Jan', value: 72 },
     { month: 'Feb', value: 45 },
@@ -51,11 +53,11 @@ export default function Donate() {
           <ArrowLeft size={28} color="white" />
         </TouchableOpacity>
         <Text className="text-white text-2xl font-bold ml-8">Donation</Text>
-        <View className="bg-[#2a3e3e] rounded-full px-3 py-2 flex-row items-center gap-2">
-          <Image source={icons.coinH}  className="size-5 mb-1" />
-          <Text className="text-white font-semibold">120</Text>
-          <Text className="text-gray-400">/15</Text>
-        </View>
+        <TouchableOpacity className='bg-[#2a3e3e] rounded-full px-3 py-2 flex-row items-center gap-2'>
+            <Image source={icons.coinH}  className="size-5 mb-1" />
+            <Text className="text-white font-semibold">120</Text>
+            <Text className="text-gray-400">/5</Text>
+          </TouchableOpacity>
       </View>
 
       <ScrollView className="flex-1" showsVerticalScrollIndicator={false}>
@@ -102,7 +104,10 @@ export default function Donate() {
               </Text>
             </View>
 
-            <TouchableOpacity className="bg-[#1AE57D] rounded-full py-3">
+            <TouchableOpacity 
+            className="bg-[#1AE57D] rounded-full py-3"
+             onPress={() => router.push('/(root)/donateNow')}
+            >
               <Text className="text-center text-black font-bold text-lg">
                 Donate Now
               </Text>
@@ -125,7 +130,7 @@ export default function Donate() {
                   <Text className="text-black text-4xl font-bold">60</Text>
                 </View>
                 <Text className="text-gray-300 text-sm text-center">
-                  Credits donated in{'\n'}total
+                  Coin donated in{'\n'}total
                 </Text>
               </View>
 

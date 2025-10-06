@@ -10,7 +10,7 @@ import impactH from "@/assets/icons/Impact_iH.png";
 import knowdledgeH from "@/assets/icons/knowledgeH_i.png";
 import supportH from "@/assets/icons/supportH_i.png";
 import trackH from "@/assets/icons/trackH_i.png";
-
+import pay_bill from "@/assets/icons/pay_bill.png";
 
 export const icons = {
   home,
@@ -24,5 +24,6 @@ export const icons = {
   impactH,
   knowdledgeH,
   supportH,
-  trackH
+  trackH,
+  pay_bill
 };
