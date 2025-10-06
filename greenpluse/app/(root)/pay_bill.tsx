@@ -12,6 +12,7 @@ import {
 } from 'react-native';
 import Slider from '@react-native-community/slider';
 import { Ionicons } from '@expo/vector-icons';
+import { useRouter } from 'expo-router';
 
 interface BillData {
   currentBill: number;
@@ -27,6 +28,7 @@ interface Account {
 }
 
 const PayBill: React.FC = () => {
+  const router = useRouter();
   const [accounts] = useState<Account[]>([
     {
       accountNumber: '125678903',
@@ -136,7 +138,10 @@ const PayBill: React.FC = () => {
         <View className="mx-5 mt-6">
           <View className="flex-row items-center justify-between mb-4">
             <Text className="text-white text-lg font-semibold">Utility Account</Text>
-            <TouchableOpacity className="bg-[#00ff88] px-4 py-2 rounded-full">
+            <TouchableOpacity 
+            className="bg-[#00ff88] px-4 py-2 rounded-full"
+            onPress={() => router.push('/(root)/add_utility')}
+            >
               <Text className="text-black font-semibold text-sm">Add Account</Text>
             </TouchableOpacity>
           </View>
@@ -519,8 +524,8 @@ const PayBill: React.FC = () => {
         <View className="flex-1 bg-[#122119] opacity-90 justify-center items-center p-5">
           <View className="bg-[#1a1a1a] rounded-2xl p-6 w-full max-w-sm">
             <View className="items-center mb-6">
-              <View className="bg-green-100 p-4 rounded-full mb-4">
-                <Ionicons name="checkmark-circle" size={40} color="#10B981" />
+              <View className="bg-[#00ff88] rounded-full p-3 mb-4">
+                <Ionicons name="checkmark" size={40} color="#122119" />
               </View>
               <Text className="text-white text-2xl font-bold mb-2">Success!</Text>
               <Text className="text-gray-300 text-center mb-2">Your payment has been processed successfully</Text>
