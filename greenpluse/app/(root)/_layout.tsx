@@ -33,6 +33,7 @@ export default function RootLayout() {
         screenOptions={{
           contentStyle: { backgroundColor: "#122119" },
           animation: "slide_from_right",
+          // Add these to prevent white flash
           headerTransparent: false,
           headerStyle: {
             backgroundColor: "#122119",
@@ -60,9 +61,14 @@ export default function RootLayout() {
             headerBackground: () => (
               <View style={{ flex: 1, backgroundColor: "#122119" }} />
             ),
+
+            // Add this to handle the transition better
             animationTypeForReplace: "push",
           }}
         />
+
+        {/* AddRecord route: hide header explicitly so parent layout doesn't force it */}
+        <Stack.Screen name="addRecord" options={{ headerShown: false }} />
 
         <Stack.Screen
           name="impact"
@@ -106,6 +112,8 @@ export default function RootLayout() {
             headerBackground: () => (
               <View style={{ flex: 1, backgroundColor: "#122119" }} />
             ),
+
+            // Add this to handle the transition better
             animationTypeForReplace: "push",
           }}
         />
@@ -129,6 +137,8 @@ export default function RootLayout() {
             headerBackground: () => (
               <View style={{ flex: 1, backgroundColor: "#122119" }} />
             ),
+
+            // Add this to handle the transition better
             animationTypeForReplace: "push",
           }}
         />
