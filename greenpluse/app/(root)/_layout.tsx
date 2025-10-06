@@ -2,6 +2,7 @@ import { Stack } from "expo-router";
 import { StatusBar, View, Text, TouchableOpacity, Image } from "react-native";
 import { icons } from "@/constants/icons";
 import { useRouter } from "expo-router";
+import { StatusBar } from "expo-status-bar";
 
 // Reusable header that accepts a dynamic title
 type HeaderProps = { title: string };
@@ -177,9 +178,26 @@ export default function RootLayout() {
             animationTypeForReplace: "push",
           }}
         />
+        
+         <Stack.Screen 
+          name="ProjectSetting" 
+          options={{ headerShown: false }} 
+        />
+
+
+        <Stack.Screen 
+          name="RequestProject" 
+          options={{ headerShown: false }} 
+        />
+
+        <Stack.Screen 
+          name="ProjectDetails" 
+          options={{ headerShown: false }} 
+        />
 
         <Stack.Screen name="signIn" options={{ headerShown: false }} />
       </Stack>
     </View>
+
   );
 }
