@@ -76,10 +76,11 @@ const Wallet = () => {
             animationType="fade"
             transparent={true}
             visible={showInfoModal}
+            statusBarTranslucent={true}
             onRequestClose={() => setShowInfoModal(false)}
           >
-            <View className="flex-1 justify-center items-center bg-black/50">
-              <View className="bg-[#2a3e3e] p-5 rounded-xl mx-5">
+            <View className="absolute top-0 left-0 right-0 bottom-0 bg-[#122119] opacity-90 justify-center items-center">
+              <View className="bg-[#2a3e3e] p-5 rounded-xl mx-5 w-[90%] max-w-md">
                 <Text className="text-white text-base mb-3">
                   <Text className="font-bold">Coins</Text> represent generated power by clean energy that can be donated.
                 </Text>

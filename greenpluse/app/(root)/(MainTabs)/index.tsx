@@ -101,12 +101,12 @@ export default function Home() {
           <View className="flex-row justify-between w-full">
             <TouchableOpacity 
             className="w-[31%] bg-[#2a3e3e] rounded-2xl items-center justify-center h-28"
-             onPress={() => router.push('/(root)/(MainTabs)/donation')}
+             onPress={() => router.push('/(root)/pay_bill')}
             
             >
-                <Image source={icons.donateH} className="size-12 mb-1" />
+                <Image source={icons.pay_bill} className="size-12 mb-1" />
                 <Text className="text-white text-center text-sm">
-                    Donate Energy
+                    Pay Electricity Bill
                 </Text>
             </TouchableOpacity>
 
