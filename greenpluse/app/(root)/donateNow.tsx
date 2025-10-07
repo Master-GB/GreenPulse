@@ -27,21 +27,30 @@ import {
   X,
 } from "lucide-react-native";
 import Slider from "@react-native-community/slider";
-import { images } from '@/constants/images';
+import { images } from "@/constants/images";
+import {
+  collection,
+  doc,
+  setDoc,
+  serverTimestamp,
+  increment,
+} from "firebase/firestore";
+import { db } from "@/config/firebaseConfig";
+import { useAuth } from "@/contexts/AuthContext";
 
 // Constants
 const COLORS = {
-  primary: '#2ECC71',
-  primaryDark: '#27AE60',
-  background: '#122119',
-  cardBg: '#1a2e2e',
-  border: '#2a4a3a',
-  borderActive: '#2ECC71',
-  textPrimary: '#FFFFFF',
-  textSecondary: '#9CA3AF',
-  success: '#2ECC71',
-  warning: '#fbbf24',
-  accent: '#A6FACF',
+  primary: "#2ECC71",
+  primaryDark: "#27AE60",
+  background: "#122119",
+  cardBg: "#1a2e2e",
+  border: "#2a4a3a",
+  borderActive: "#2ECC71",
+  textPrimary: "#FFFFFF",
+  textSecondary: "#9CA3AF",
+  success: "#2ECC71",
+  warning: "#fbbf24",
+  accent: "#A6FACF",
 };
 
 const ANIMATION = {
@@ -72,11 +81,41 @@ interface DonationImpact {
 
 // Mock beneficiaries data
 const mockBeneficiaries: Beneficiary[] = [
-  { id: '1', name: 'Silva Family', email: 'silva@example.com', location: 'Colombo', needsKWh: 50 },
-  { id: '2', name: 'Perera Household', email: 'perera@example.com', location: 'Kandy', needsKWh: 75 },
-  { id: '3', name: 'Fernando Family', email: 'fernando@example.com', location: 'Galle', needsKWh: 60 },
-  { id: '4', name: 'Dias Community', email: 'dias@example.com', location: 'Jaffna', needsKWh: 100 },
-  { id: '5', name: 'Gunasekara Home', email: 'gunasekara@example.com', location: 'Negombo', needsKWh: 45 },
+  {
+    id: "1",
+    name: "Silva Family",
+    email: "silva@example.com",
+    location: "Colombo",
+    needsKWh: 50,
+  },
+  {
+    id: "2",
+    name: "Perera Household",
+    email: "perera@example.com",
+    location: "Kandy",
+    needsKWh: 75,
+  },
+  {
+    id: "3",
+    name: "Fernando Family",
+    email: "fernando@example.com",
+    location: "Galle",
+    needsKWh: 60,
+  },
+  {
+    id: "4",
+    name: "Dias Community",
+    email: "dias@example.com",
+    location: "Jaffna",
+    needsKWh: 100,
+  },
+  {
+    id: "5",
+    name: "Gunasekara Home",
+    email: "gunasekara@example.com",
+    location: "Negombo",
+    needsKWh: 45,
+  },
 ];
 
 // Custom Hook for Donation Calculations
@@ -159,7 +198,11 @@ interface DonationAmountCardProps {
   impact: DonationImpact;
 }
 
-const DonationAmountCard: React.FC<DonationAmountCardProps> = ({ coinAmount, setCoinAmount, impact }) => {
+const DonationAmountCard: React.FC<DonationAmountCardProps> = ({
+  coinAmount,
+  setCoinAmount,
+  impact,
+}) => {
   const handleSliderChange = (value: number) => {
     setCoinAmount(Math.round(value));
   };
@@ -168,14 +211,18 @@ const DonationAmountCard: React.FC<DonationAmountCardProps> = ({ coinAmount, set
     <View className="rounded-xl px-6 py-6 border-2 border-[#2a4a3a] mx-1 mb-5 bg-[#1a2e2e]/30">
       <View className="flex-row items-center mb-4">
         <Coins size={24} color={COLORS.primary} />
-        <Text className="text-white text-xl font-bold ml-3">Choose Amount to Donate</Text>
+        <Text className="text-white text-xl font-bold ml-3">
+          Choose Amount to Donate
+        </Text>
       </View>
 
       {/* Amount Display */}
       <View className="flex-row items-center justify-center mb-1">
         <TouchableOpacity
           className="bg-white rounded-full w-14 h-14 items-center justify-center shadow-lg"
-          onPress={() => setCoinAmount(Math.max(COIN_LIMITS.min, coinAmount - 1))}
+          onPress={() =>
+            setCoinAmount(Math.max(COIN_LIMITS.min, coinAmount - 1))
+          }
         >
           <Text className="text-[#1a2e2e] text-2xl font-bold">−</Text>
         </TouchableOpacity>
@@ -189,7 +236,9 @@ const DonationAmountCard: React.FC<DonationAmountCardProps> = ({ coinAmount, set
 
         <TouchableOpacity
           className="bg-white rounded-full w-14 h-14 items-center justify-center shadow-lg"
-          onPress={() => setCoinAmount(Math.min(COIN_LIMITS.max, coinAmount + 1))}
+          onPress={() =>
+            setCoinAmount(Math.min(COIN_LIMITS.max, coinAmount + 1))
+          }
         >
           <Text className="text-[#1a2e2e] text-2xl font-bold">+</Text>
         </TouchableOpacity>
@@ -201,7 +250,9 @@ const DonationAmountCard: React.FC<DonationAmountCardProps> = ({ coinAmount, set
           <View className="absolute left-0 right-0 h-2 bg-[#374151] rounded-full" />
           <View
             className="absolute left-0 h-2 bg-[#2ECC71] rounded-full"
-            style={{ width: `${((coinAmount - COIN_LIMITS.min) / (COIN_LIMITS.max - COIN_LIMITS.min)) * 100}%` }}
+            style={{
+              width: `${((coinAmount - COIN_LIMITS.min) / (COIN_LIMITS.max - COIN_LIMITS.min)) * 100}%`,
+            }}
           />
           <View
             className="absolute"
@@ -245,17 +296,23 @@ const DonationAmountCard: React.FC<DonationAmountCardProps> = ({ coinAmount, set
         <View className="flex-row justify-around">
           <View className="items-center">
             <Zap size={20} color={COLORS.warning} />
-            <Text className="text-white font-bold text-lg mt-1">{impact.kWh} kWh</Text>
+            <Text className="text-white font-bold text-lg mt-1">
+              {impact.kWh} kWh
+            </Text>
             <Text className="text-gray-400 text-xs">Energy</Text>
           </View>
           <View className="items-center">
             <Home size={20} color={COLORS.primary} />
-            <Text className="text-white font-bold text-lg mt-1">{impact.families}</Text>
+            <Text className="text-white font-bold text-lg mt-1">
+              {impact.families}
+            </Text>
             <Text className="text-gray-400 text-xs">Families</Text>
           </View>
           <View className="items-center">
             <Coins size={20} color={COLORS.accent} />
-            <Text className="text-white font-bold text-lg mt-1">RS {(impact.avgCost).toFixed(2)}</Text>
+            <Text className="text-white font-bold text-lg mt-1">
+              RS {impact.avgCost.toFixed(2)}
+            </Text>
             <Text className="text-gray-400 text-xs">Value</Text>
           </View>
         </View>
@@ -274,39 +331,51 @@ interface BeneficiaryTypeCardProps {
   setSelectedBeneficiary: (beneficiary: Beneficiary | null) => void;
 }
 
-const BeneficiaryTypeCard: React.FC<BeneficiaryTypeCardProps> = ({ selectedOption, setSelectedOption, searchQuery, setSearchQuery, filteredBeneficiaries, selectedBeneficiary, setSelectedBeneficiary }) => {
+const BeneficiaryTypeCard: React.FC<BeneficiaryTypeCardProps> = ({
+  selectedOption,
+  setSelectedOption,
+  searchQuery,
+  setSearchQuery,
+  filteredBeneficiaries,
+  selectedBeneficiary,
+  setSelectedBeneficiary,
+}) => {
   const handleBeneficiarySelect = (beneficiary: Beneficiary) => {
     setSelectedBeneficiary(beneficiary);
-    setSearchQuery(''); // Clear search query to show selected beneficiary
+    setSearchQuery(""); // Clear search query to show selected beneficiary
   };
   return (
     <View className="rounded-xl px-6 py-6 border-2 border-[#2a4a3a] mx-1 mb-5 bg-[#1a2e2e]/30">
       <View className="flex-row items-center mb-5">
         <Users size={24} color={COLORS.primary} />
-        <Text className="text-white text-xl font-bold ml-3">Choose Beneficiary Type</Text>
+        <Text className="text-white text-xl font-bold ml-3">
+          Choose Beneficiary Type
+        </Text>
       </View>
 
       <View className="space-y-4">
         {/* Auto Donation Option */}
-        <TouchableOpacity 
+        <TouchableOpacity
           className={`mb-3 px-4 py-4 rounded-xl border-2 ${
-            selectedOption === 'auto' 
-              ? 'border-[#2ECC71] bg-[#1e3a3a]' 
-              : 'border-[#2d4a4a]'
+            selectedOption === "auto"
+              ? "border-[#2ECC71] bg-[#1e3a3a]"
+              : "border-[#2d4a4a]"
           }`}
-          onPress={() => setSelectedOption('auto')}
+          onPress={() => setSelectedOption("auto")}
         >
           <View className="flex-row items-center">
             <View className="mr-3 p-2 bg-[#2d4a4a] rounded-lg">
               <Shuffle size={22} color={COLORS.primary} />
             </View>
             <View className="flex-1">
-              <Text className="text-white font-semibold text-base">Auto Donate</Text>
+              <Text className="text-white font-semibold text-base">
+                Auto Donate
+              </Text>
               <Text className="text-gray-400 text-sm mt-1">
                 AI-powered optimal distribution
               </Text>
             </View>
-            {selectedOption === 'auto' && (
+            {selectedOption === "auto" && (
               <View className="w-6 h-6 rounded-full bg-[#2ECC71] items-center justify-center">
                 <Check size={16} color="white" strokeWidth={3} />
               </View>
@@ -315,25 +384,27 @@ const BeneficiaryTypeCard: React.FC<BeneficiaryTypeCardProps> = ({ selectedOptio
         </TouchableOpacity>
 
         {/* Manual Donation Option */}
-        <TouchableOpacity 
+        <TouchableOpacity
           className={`px-4 py-4 rounded-xl border-2 ${
-            selectedOption === 'manual' 
-              ? 'border-[#2ECC71] bg-[#1e3a3a]' 
-              : 'border-[#2d4a4a]'
+            selectedOption === "manual"
+              ? "border-[#2ECC71] bg-[#1e3a3a]"
+              : "border-[#2d4a4a]"
           }`}
-          onPress={() => setSelectedOption('manual')}
+          onPress={() => setSelectedOption("manual")}
         >
           <View className="flex-row items-center">
             <View className="mr-3 p-2 bg-[#2d4a4a] rounded-lg">
               <UserPlus size={22} color={COLORS.primary} />
             </View>
             <View className="flex-1">
-              <Text className="text-white font-semibold text-base">Choose Manually</Text>
+              <Text className="text-white font-semibold text-base">
+                Choose Manually
+              </Text>
               <Text className="text-gray-400 text-sm mt-1">
                 Select specific beneficiaries
               </Text>
             </View>
-            {selectedOption === 'manual' && (
+            {selectedOption === "manual" && (
               <View className="w-6 h-6 rounded-full bg-[#2ECC71] items-center justify-center">
                 <Check size={16} color="white" strokeWidth={3} />
               </View>
@@ -355,7 +426,7 @@ const BeneficiaryTypeCard: React.FC<BeneficiaryTypeCardProps> = ({ selectedOptio
               onChangeText={setSearchQuery}
             />
             {searchQuery.length > 0 && (
-              <TouchableOpacity onPress={() => setSearchQuery('')}>
+              <TouchableOpacity onPress={() => setSearchQuery("")}>
                 <X size={20} color="#1a2e2e" />
               </TouchableOpacity>
             )}
@@ -370,27 +441,40 @@ const BeneficiaryTypeCard: React.FC<BeneficiaryTypeCardProps> = ({ selectedOptio
                     <TouchableOpacity
                       key={beneficiary.id}
                       className={`px-4 py-3 border-b border-[#2a4a3a] ${
-                        selectedBeneficiary?.id === beneficiary.id ? 'bg-[#2a4a3a]' : ''
+                        selectedBeneficiary?.id === beneficiary.id
+                          ? "bg-[#2a4a3a]"
+                          : ""
                       }`}
                       onPress={() => handleBeneficiarySelect(beneficiary)}
                     >
                       <View className="flex-row items-center justify-between">
                         <View className="flex-1">
-                          <Text className="text-white font-semibold text-base">{beneficiary.name}</Text>
-                          <Text className="text-gray-400 text-sm">{beneficiary.email}</Text>
+                          <Text className="text-white font-semibold text-base">
+                            {beneficiary.name}
+                          </Text>
+                          <Text className="text-gray-400 text-sm">
+                            {beneficiary.email}
+                          </Text>
                           <Text className="text-gray-500 text-xs mt-1">
-                            {beneficiary.location} • Needs: {beneficiary.needsKWh} kWh
+                            {beneficiary.location} • Needs:{" "}
+                            {beneficiary.needsKWh} kWh
                           </Text>
                         </View>
                         {selectedBeneficiary?.id === beneficiary.id && (
-                          <Check size={20} color={COLORS.primary} strokeWidth={3} />
+                          <Check
+                            size={20}
+                            color={COLORS.primary}
+                            strokeWidth={3}
+                          />
                         )}
                       </View>
                     </TouchableOpacity>
                   ))
                 ) : (
                   <View className="px-4 py-6 items-center">
-                    <Text className="text-gray-400 text-base">No beneficiaries found</Text>
+                    <Text className="text-gray-400 text-base">
+                      No beneficiaries found
+                    </Text>
                   </View>
                 )}
               </ScrollView>
@@ -402,23 +486,31 @@ const BeneficiaryTypeCard: React.FC<BeneficiaryTypeCardProps> = ({ selectedOptio
             <View className="bg-[#1e3a3a] rounded-xl border-2 border-[#2ECC71] px-4 py-3 mt-3">
               <View className="flex-row items-center justify-between">
                 <View className="flex-1">
-                  <Text className="text-[#2ECC71] text-xs font-semibold mb-1">SELECTED BENEFICIARY</Text>
+                  <Text className="text-[#2ECC71] text-xs font-semibold mb-1">
+                    SELECTED BENEFICIARY
+                  </Text>
                   <View className="flex-row items-center">
                     <View className="bg-[#2d4a4a] w-10 h-10 rounded-full items-center justify-center mr-3 ">
                       <UserPlus size={18} color={COLORS.primary} />
                     </View>
                     <View>
-                      <Text className="text-white font-semibold text-base">{selectedBeneficiary.name}</Text>
-                      <Text className="text-gray-400 text-sm">{selectedBeneficiary.email}</Text>
+                      <Text className="text-white font-semibold text-base">
+                        {selectedBeneficiary.name}
+                      </Text>
+                      <Text className="text-gray-400 text-sm">
+                        {selectedBeneficiary.email}
+                      </Text>
                     </View>
                   </View>
                   <View className="ml-12 mt-2 flex-row items-center">
                     <View className="bg-[#2a4a3a] px-2 py-1 rounded">
-                      <Text className="text-[#2ECC71] text-xs">{selectedBeneficiary.location}</Text>
+                      <Text className="text-[#2ECC71] text-xs">
+                        {selectedBeneficiary.location}
+                      </Text>
                     </View>
                   </View>
                 </View>
-                <TouchableOpacity 
+                <TouchableOpacity
                   onPress={() => setSelectedBeneficiary(null)}
                   className="ml-2 p-1"
                 >
@@ -437,7 +529,9 @@ interface ConversationInfoCardProps {
   impact: DonationImpact;
 }
 
-const ConversationInfoCard: React.FC<ConversationInfoCardProps> = ({ impact }) => {
+const ConversationInfoCard: React.FC<ConversationInfoCardProps> = ({
+  impact,
+}) => {
   return (
     <View className="mx-1">
       <Text className="text-white text-xl font-bold mb-4">
@@ -450,28 +544,36 @@ const ConversationInfoCard: React.FC<ConversationInfoCardProps> = ({ impact }) =
             <Text className="text-gray-300 text-base flex-1">
               Platform fees
             </Text>
-            <Text className="text-emerald-400 font-bold text-base">No fees</Text>
+            <Text className="text-emerald-400 font-bold text-base">
+              No fees
+            </Text>
           </View>
 
           <View className="flex-row justify-between items-center py-2 border-b border-[#2a4a3a]/50">
             <Text className="text-gray-300 text-base flex-1">
               Average donation size
             </Text>
-            <Text className="text-white font-semibold text-base">{impact.kWh} kWh</Text>
+            <Text className="text-white font-semibold text-base">
+              {impact.kWh} kWh
+            </Text>
           </View>
 
           <View className="flex-row justify-between items-center py-2 border-b border-[#2a4a3a]/50">
             <Text className="text-gray-300 text-base flex-1">
               Average donation value
             </Text>
-            <Text className="text-white font-semibold text-base">RS {(impact.avgCost).toFixed(2)}</Text>
+            <Text className="text-white font-semibold text-base">
+              RS {impact.avgCost.toFixed(2)}
+            </Text>
           </View>
 
           <View className="flex-row justify-between items-center py-2">
             <Text className="text-gray-300 text-base flex-1">
-               Community impact 
+              Community impact
             </Text>
-            <Text className="text-white font-semibold text-base">{impact.families} householders</Text>
+            <Text className="text-white font-semibold text-base">
+              {impact.families} householders
+            </Text>
           </View>
         </View>
 
@@ -500,7 +602,15 @@ interface SuccessModalProps {
   userName?: string;
 }
 
-const SuccessModal: React.FC<SuccessModalProps> = ({ visible, onClose, coinAmount, impact, confettiAnims, glowAnim, userName = "Friend" }) => {
+const SuccessModal: React.FC<SuccessModalProps> = ({
+  visible,
+  onClose,
+  coinAmount,
+  impact,
+  confettiAnims,
+  glowAnim,
+  userName = "Friend",
+}) => {
   return (
     <Modal
       visible={visible}
@@ -510,7 +620,7 @@ const SuccessModal: React.FC<SuccessModalProps> = ({ visible, onClose, coinAmoun
       statusBarTranslucent={true}
     >
       <View className="flex-1">
-        <StatusBar 
+        <StatusBar
           barStyle="light-content"
           backgroundColor="transparent"
           translucent={true}
@@ -520,7 +630,12 @@ const SuccessModal: React.FC<SuccessModalProps> = ({ visible, onClose, coinAmoun
           {/* Confetti */}
           {confettiAnims.map((anim: any, index: number) => {
             const colors = [
-              "#2ECC71", "#fbbf24", "#ef4444", "#3b82f6", "#a855f7", "#ec4899",
+              "#2ECC71",
+              "#fbbf24",
+              "#ef4444",
+              "#3b82f6",
+              "#a855f7",
+              "#ec4899",
             ];
             const color = colors[index % colors.length];
             const size = Math.random() * 8 + 4;
@@ -567,8 +682,15 @@ const SuccessModal: React.FC<SuccessModalProps> = ({ visible, onClose, coinAmoun
 
             {/* Success Message */}
             <Text className="text-gray-300 text-base text-center mb-2 leading-6">
-              Your donation of <Text className="text-[#2ECC71] font-bold">{coinAmount} coins</Text> is helping{' '}
-              <Text className="text-[#2ECC71] font-bold">{impact.families} families</Text> today.
+              Your donation of{" "}
+              <Text className="text-[#2ECC71] font-bold">
+                {coinAmount} coins
+              </Text>{" "}
+              is helping{" "}
+              <Text className="text-[#2ECC71] font-bold">
+                {impact.families} families
+              </Text>{" "}
+              today.
             </Text>
 
             {/* Impact Stats */}
@@ -576,13 +698,17 @@ const SuccessModal: React.FC<SuccessModalProps> = ({ visible, onClose, coinAmoun
               <View className="flex-row justify-around">
                 <View className="items-center">
                   <Zap size={24} color={COLORS.warning} />
-                  <Text className="text-white font-bold text-lg mt-1">{impact.kWh} kWh</Text>
+                  <Text className="text-white font-bold text-lg mt-1">
+                    {impact.kWh} kWh
+                  </Text>
                   <Text className="text-gray-400 text-xs">Donated</Text>
                 </View>
                 <View className="w-px bg-[#2a4a3a]" />
                 <View className="items-center">
                   <Home size={24} color={COLORS.primary} />
-                  <Text className="text-white font-bold text-lg mt-1">{impact.families}</Text>
+                  <Text className="text-white font-bold text-lg mt-1">
+                    {impact.families}
+                  </Text>
                   <Text className="text-gray-400 text-xs">Families</Text>
                 </View>
               </View>
@@ -611,7 +737,11 @@ const SuccessModal: React.FC<SuccessModalProps> = ({ visible, onClose, coinAmoun
                   ],
                 }}
               />
-              <Lightbulb size={56} color={COLORS.warning} fill={COLORS.warning} />
+              <Lightbulb
+                size={56}
+                color={COLORS.warning}
+                fill={COLORS.warning}
+              />
             </View>
 
             {/* Done Button */}
@@ -632,12 +762,16 @@ const SuccessModal: React.FC<SuccessModalProps> = ({ visible, onClose, coinAmoun
 
 // Main Component
 export default function DonateNow() {
-  const [coinAmount, setCoinAmount] = useState(10);
-  const [selectedOption, setSelectedOption] = useState<"auto" | "manual">("auto");
+  const [coinAmount, setCoinAmount] = useState(1);
+  const [selectedOption, setSelectedOption] = useState<"auto" | "manual">(
+    "auto"
+  );
   const [searchQuery, setSearchQuery] = useState("");
-  const [selectedBeneficiary, setSelectedBeneficiary] = useState<Beneficiary | null>(null);
+  const [selectedBeneficiary, setSelectedBeneficiary] =
+    useState<Beneficiary | null>(null);
   const [showSuccessModal, setShowSuccessModal] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
+  const { user } = useAuth();
 
   // Custom hooks
   const impact = useDonationImpact(coinAmount);
@@ -676,32 +810,65 @@ export default function DonateNow() {
 
   const handleDonateNow = async () => {
     // Validation
-    if (selectedOption === 'manual' && !selectedBeneficiary) {
+    if (selectedOption === "manual" && !selectedBeneficiary) {
       // In real app, show error toast
       return;
     }
 
     setIsLoading(true);
-    
-    // Simulate API call
-    setTimeout(() => {
-      setIsLoading(false);
+    try {
+      // Prepare donation payload
+      const donationRef = doc(collection(db, "donations"));
+      const donationPayload = {
+        donationId: donationRef.id,
+        userId: user?.uid ?? null,
+        amountCoins: coinAmount,
+        beneficiaryType: selectedOption,
+        beneficiaryId:
+          selectedOption === "manual"
+            ? (selectedBeneficiary?.id ?? null)
+            : null,
+        createdAt: serverTimestamp(),
+      };
+
+      // Persist to Firestore
+      await setDoc(donationRef, donationPayload);
+      const communityGoalRef = doc(db, "communityGoal", "totalDonations");
+      const fieldToUpdate =
+        selectedOption === "manual" ? "manualCoins" : "autoCoins";
+
+      await setDoc(
+        communityGoalRef,
+        {
+          [fieldToUpdate]: increment(coinAmount),
+          lastUpdated: serverTimestamp(),
+        },
+        { merge: true }
+      );
+
+      // Keep the same 1s UX feel
+      await new Promise((resolve) => setTimeout(resolve, 1000));
+
       setShowSuccessModal(true);
-    }, 1000);
+    } catch (error) {
+      console.error("Failed to store donation:", error);
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   const handleCloseModal = () => {
     setShowSuccessModal(false);
     // Reset form
     setCoinAmount(10);
-    setSelectedOption('auto');
-    setSearchQuery('');
+    setSelectedOption("auto");
+    setSearchQuery("");
     setSelectedBeneficiary(null);
   };
 
   return (
     <View className="flex-1 bg-[#122119]">
-      <StatusBar 
+      <StatusBar
         barStyle="light-content"
         backgroundColor="#122119"
         translucent={false}
@@ -716,7 +883,7 @@ export default function DonateNow() {
         showsVerticalScrollIndicator={false}
       >
         {/* Donation Amount Section */}
-        <DonationAmountCard 
+        <DonationAmountCard
           coinAmount={coinAmount}
           setCoinAmount={setCoinAmount}
           impact={impact}
@@ -741,26 +908,28 @@ export default function DonateNow() {
       <View className="absolute bottom-0 left-0 right-0 ">
         <View className="h-32 bg-gradient-to-t from-[#122119] via-[#122119] via-90% to-transparent" />
         <View className="px-5 pb-6 pt-2 bg-[#122119]">
-        <TouchableOpacity
-          className={`rounded-full py-4 shadow-lg ${
-            isLoading ? 'bg-[#27AE60]' : 'bg-[#2ECC71]'
-          }`}
-          onPress={handleDonateNow}
-          disabled={isLoading || (selectedOption === 'manual' && !selectedBeneficiary)}
-        >
-          {isLoading ? (
-            <ActivityIndicator color="#000000" size="small" />
-          ) : (
-            <Text className="text-center text-black font-bold text-xl">
-              Donate Now
+          <TouchableOpacity
+            className={`rounded-full py-4 shadow-lg ${
+              isLoading ? "bg-[#27AE60]" : "bg-[#2ECC71]"
+            }`}
+            onPress={handleDonateNow}
+            disabled={
+              isLoading || (selectedOption === "manual" && !selectedBeneficiary)
+            }
+          >
+            {isLoading ? (
+              <ActivityIndicator color="#000000" size="small" />
+            ) : (
+              <Text className="text-center text-black font-bold text-xl">
+                Donate Now
+              </Text>
+            )}
+          </TouchableOpacity>
+          {selectedOption === "manual" && !selectedBeneficiary && (
+            <Text className="text-center text-red-800 text-sm mt-2">
+              Please select a beneficiary
             </Text>
           )}
-        </TouchableOpacity>
-        {selectedOption === 'manual' && !selectedBeneficiary && (
-          <Text className="text-center text-gray-400 text-sm mt-2">
-            Please select a beneficiary
-          </Text>
-        )}
         </View>
       </View>
 

@@ -2,6 +2,7 @@ import { Stack } from "expo-router";
 import { StatusBar, View, Text, TouchableOpacity, Image } from "react-native";
 import { icons } from "@/constants/icons";
 import { useRouter } from "expo-router";
+import ProtectedRoute from '../../components/ProtectedRoute';
 
 // Reusable header that accepts a dynamic title
 type HeaderProps = { title: string };
@@ -42,6 +43,7 @@ function AppHeader({ title }: HeaderProps) {
 
 export default function RootLayout() {
   return (
+    <ProtectedRoute>
     <View style={{ flex: 1, backgroundColor: "#122119" }}>
       <StatusBar hidden={true} backgroundColor="#122119" />
       <Stack
@@ -223,6 +225,6 @@ export default function RootLayout() {
         <Stack.Screen name="signIn" options={{ headerShown: false }} />
       </Stack>
     </View>
-
+   </ProtectedRoute>
   );
 }
