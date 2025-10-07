@@ -101,13 +101,12 @@ export default function Home() {
           <View className="flex-row justify-between w-full">
             <TouchableOpacity 
             className="w-[31%] bg-[#2a3e3e] rounded-2xl items-center justify-center h-28"
-             onPress={() => router.push('/(root)/pay_bill')}
-            
+             onPress={() => router.push('/(root)/wallet')} 
             >
-                <Image source={icons.pay_bill} className="size-12 mb-1" />
-                <Text className="text-white text-center text-sm">
-                    Pay Electricity Bill
-                </Text>
+                <Image source={icons.wallet}  className="size-12 mb-1" />
+              <Text className="text-white text-center text-sm">
+                Wallet
+              </Text>
             </TouchableOpacity>
 
             <TouchableOpacity className="w-[31%] bg-[#2a3e3e] rounded-2xl items-center justify-center h-28">
@@ -129,11 +128,14 @@ export default function Home() {
           </View>
 
           <View className="flex-row gap-3 mt-3">
-            <TouchableOpacity className="flex-[1.5] bg-[#2a3e3e] rounded-2xl  items-center justify-center h-28">
-               <Image source={icons.trackH}  className="size-12 mb-1" />
-              <Text className="text-white text-center text-sm">
-                Track Usage & Generated
-              </Text>
+            <TouchableOpacity 
+            className="flex-[1.5] bg-[#2a3e3e] rounded-2xl  items-center justify-center h-28"
+            onPress={() => router.push('/(root)/pay_bill')}
+            >
+               <Image source={icons.pay_bill} className="size-12 mb-1" />
+                <Text className="text-white text-center text-sm">
+                    Pay Electricity Bill
+                </Text>
             </TouchableOpacity>
 
             <TouchableOpacity className="flex-[1.5] bg-[#2a3e3e] rounded-2xl p-4 items-center justify-center h-28">
@@ -155,7 +157,18 @@ export default function Home() {
           </View>
 
           {/* Story Card 1 */}
-          <View className="bg-[#2a3e3e] rounded-3xl overflow-hidden mb-4">
+          <TouchableOpacity 
+            className="bg-[#2a3e3e] rounded-3xl overflow-hidden mb-4"
+            onPress={() => router.push({
+              pathname: "/stories/[id]",
+              params: {
+                id: "1",
+                title: "Community Power Donation",
+                image: "https://images.unsplash.com/photo-1509391366360-2e959784a276?w=800",
+                body: "Your donation powered 10 homes this month. Thanks to community contributions, families in Galle now have reliable clean energy access, enabling children to study at night and businesses to operate after dark."
+              }
+            })}
+          >
             <Image
               source={{ uri: 'https://images.unsplash.com/photo-1509391366360-2e959784a276?w=800' }}
               className="w-full h-48"
@@ -176,10 +189,21 @@ export default function Home() {
                 reliable clean energy access.
               </Text>
             </View>
-          </View>
+          </TouchableOpacity>
 
           {/* Story Card 2 */}
-          <View className="bg-[#2a3e3e] rounded-3xl overflow-hidden mb-6">
+          <TouchableOpacity 
+            className="bg-[#2a3e3e] rounded-3xl overflow-hidden mb-6"
+            onPress={() => router.push({
+              pathname: "/stories/[id]",
+              params: {
+                id: "2",
+                title: "Kandy Solar Project",
+                image: "https://images.unsplash.com/photo-1508514177221-188b1cf16e9d?w=800",
+                body: "Our community solar project in Kandy is now fully operational, providing clean energy to 15 households. The project includes battery storage to ensure consistent power supply even during cloudy days."
+              }
+            })}
+          >
             <Image
               source={{ uri: 'https://images.unsplash.com/photo-1508514177221-188b1cf16e9d?w=800' }}
               className="w-full h-48"
@@ -202,7 +226,7 @@ export default function Home() {
                 families in the Kandy district.
               </Text>
             </View>
-          </View>
+          </TouchableOpacity>
         </View>
       </ScrollView>
     </SafeAreaView>

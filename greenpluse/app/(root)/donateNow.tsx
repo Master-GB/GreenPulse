@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useMemo } from "react";
 import {
   View,
   Text,
@@ -9,7 +9,8 @@ import {
   Modal,
   Animated,
   Easing,
-  Image
+  Image,
+  ActivityIndicator,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import {
@@ -21,23 +22,78 @@ import {
   Users,
   Shuffle,
   UserPlus,
+  Zap,
+  Home,
+  X,
 } from "lucide-react-native";
 import Slider from "@react-native-community/slider";
-import { images } from '@/constants/images'
+import { images } from '@/constants/images';
 
-export default function DonateNow() {
-  const [coinAmount, setCoinAmount] = useState(10);
-  const [selectedOption, setSelectedOption] = useState<"auto" | "manual">(
-    "auto"
-  );
-  const [searchQuery, setSearchQuery] = useState("");
-  const [showSuccessModal, setShowSuccessModal] = useState(false);
+// Constants
+const COLORS = {
+  primary: '#2ECC71',
+  primaryDark: '#27AE60',
+  background: '#122119',
+  cardBg: '#1a2e2e',
+  border: '#2a4a3a',
+  borderActive: '#2ECC71',
+  textPrimary: '#FFFFFF',
+  textSecondary: '#9CA3AF',
+  success: '#2ECC71',
+  warning: '#fbbf24',
+  accent: '#A6FACF',
+};
 
-  // Radiating halo glow
-  const [glowAnim] = useState(new Animated.Value(0));
+const ANIMATION = {
+  confettiDuration: 3000,
+  glowDuration: 1500,
+  confettiCount: 20, // Reduced from 30 for performance
+};
 
+const COIN_LIMITS = {
+  min: 1,
+  max: 1000,
+};
+
+// Types
+interface Beneficiary {
+  id: string;
+  name: string;
+  email: string;
+  location: string;
+  needsKWh: number;
+}
+
+interface DonationImpact {
+  kWh: number;
+  families: number;
+  avgCost: number;
+}
+
+// Mock beneficiaries data
+const mockBeneficiaries: Beneficiary[] = [
+  { id: '1', name: 'Silva Family', email: 'silva@example.com', location: 'Colombo', needsKWh: 50 },
+  { id: '2', name: 'Perera Household', email: 'perera@example.com', location: 'Kandy', needsKWh: 75 },
+  { id: '3', name: 'Fernando Family', email: 'fernando@example.com', location: 'Galle', needsKWh: 60 },
+  { id: '4', name: 'Dias Community', email: 'dias@example.com', location: 'Jaffna', needsKWh: 100 },
+  { id: '5', name: 'Gunasekara Home', email: 'gunasekara@example.com', location: 'Negombo', needsKWh: 45 },
+];
+
+// Custom Hook for Donation Calculations
+const useDonationImpact = (coinAmount: number): DonationImpact => {
+  return useMemo(() => {
+    const kWh = coinAmount * 1; // 1 coin = 1 kWh
+    // Calculate families: 1-50kWh = 1 family, 51-100kWh = 2 families, etc.
+    const families = kWh > 0 ? Math.max(1, Math.ceil(kWh / 50)) : 0;
+    const avgCost = coinAmount * 23.38; // 1 coin = RS 23.38
+    return { kWh, families, avgCost };
+  }, [coinAmount]);
+};
+
+// Custom Hook for Confetti Animation
+const useConfettiAnimation = (showModal: boolean) => {
   const [confettiAnims] = useState(() =>
-    Array.from({ length: 30 }, () => ({
+    Array.from({ length: ANIMATION.confettiCount }, () => ({
       translateY: new Animated.Value(0),
       translateX: new Animated.Value(0),
       rotate: new Animated.Value(0),
@@ -46,20 +102,7 @@ export default function DonateNow() {
   );
 
   useEffect(() => {
-    if (showSuccessModal) {
-      // Radiating halo loop
-      Animated.loop(
-        Animated.sequence([
-          Animated.timing(glowAnim, {
-            toValue: 1,
-            duration: 1500,
-            easing: Easing.inOut(Easing.ease),
-            useNativeDriver: false,
-          }),
-        ])
-      ).start();
-
-      // Confetti animation
+    if (showModal) {
       confettiAnims.forEach((anim, index) => {
         const delay = index * 50;
         const randomX = (Math.random() - 0.5) * 400;
@@ -68,28 +111,28 @@ export default function DonateNow() {
         Animated.parallel([
           Animated.timing(anim.translateY, {
             toValue: 600,
-            duration: 3000,
+            duration: ANIMATION.confettiDuration,
             delay,
             easing: Easing.out(Easing.cubic),
             useNativeDriver: true,
           }),
           Animated.timing(anim.translateX, {
             toValue: randomX,
-            duration: 3000,
+            duration: ANIMATION.confettiDuration,
             delay,
             easing: Easing.out(Easing.ease),
             useNativeDriver: true,
           }),
           Animated.timing(anim.rotate, {
             toValue: randomRotation,
-            duration: 3000,
+            duration: ANIMATION.confettiDuration,
             delay,
             easing: Easing.linear,
             useNativeDriver: true,
           }),
           Animated.timing(anim.opacity, {
             toValue: 0,
-            duration: 3000,
+            duration: ANIMATION.confettiDuration,
             delay,
             easing: Easing.out(Easing.ease),
             useNativeDriver: true,
@@ -97,8 +140,6 @@ export default function DonateNow() {
         ]).start();
       });
     } else {
-      // Reset animations
-      glowAnim.setValue(0);
       confettiAnims.forEach((anim) => {
         anim.translateY.setValue(0);
         anim.translateX.setValue(0);
@@ -106,285 +147,380 @@ export default function DonateNow() {
         anim.opacity.setValue(1);
       });
     }
-  }, [showSuccessModal]);
+  }, [showModal]);
 
+  return confettiAnims;
+};
+
+// Subcomponents
+interface DonationAmountCardProps {
+  coinAmount: number;
+  setCoinAmount: (amount: number) => void;
+  impact: DonationImpact;
+}
+
+const DonationAmountCard: React.FC<DonationAmountCardProps> = ({ coinAmount, setCoinAmount, impact }) => {
   const handleSliderChange = (value: number) => {
     setCoinAmount(Math.round(value));
   };
 
-  const handleDonateNow = () => {
-    setShowSuccessModal(true);
-  };
-
-  const handleCloseModal = () => {
-    setShowSuccessModal(false);
-  };
-
   return (
-    <View className="flex-1 bg-[#122119]">
-      <StatusBar 
-        barStyle="light-content"
-        backgroundColor="#122119"
-        translucent={false}
-      />
-      <ScrollView
-        className="flex-1"
-        contentContainerStyle={{
-          paddingLeft: 15,
-          paddingRight: 15,
-          paddingBottom: 120,
-          paddingTop :1
-        }}
-        showsVerticalScrollIndicator={false}
-      >
-        {/* Donation Amount Section */}
-        <View className="rounded px-6 py-4 border border-[#2a4a3a]  mx-1">
-          <View className="flex-row items-center mb-[-7px] ml-[-15px]">
-            <Coins size={24} color="#2ECC71" className="mr-2" />
-            <Text className="text-white text-xl font-bold ml-2">Choose Amount to Donate</Text>
-          </View>
+    <View className="rounded-xl px-6 py-6 border-2 border-[#2a4a3a] mx-1 mb-5 bg-[#1a2e2e]/30">
+      <View className="flex-row items-center mb-4">
+        <Coins size={24} color={COLORS.primary} />
+        <Text className="text-white text-xl font-bold ml-3">Choose Amount to Donate</Text>
+      </View>
 
-          {/* Amount Display with +/- buttons */}
-          <View className="flex-row items-center justify-center  mt-2">
-            <TouchableOpacity
-              className="bg-white rounded-full w-16 h-16 items-center justify-center"
-              onPress={() => setCoinAmount(Math.max(1, coinAmount - 1))}
-            >
-              <Text className="text-[#1a2e2e] text-3xl font-bold">−</Text>
-            </TouchableOpacity>
-
-            <View className="mx-8 items-center">
-              <Text className="text-[#2ECC71] text-6xl font-bold">
-                {coinAmount}
-              </Text>
-              <Text className="text-gray-400 text-lg mt-1">Coin</Text>
-            </View>
-
-            <TouchableOpacity
-              className="bg-white rounded-full w-16 h-16 items-center justify-center"
-              onPress={() => setCoinAmount(Math.min(1000, coinAmount + 1))}
-            >
-              <Text className="text-[#1a2e2e] text-3xl font-bold">+</Text>
-            </TouchableOpacity>
-          </View>
-
-          {/* Slider */}
-          <View className="mb-[-3px] px-1 py-1">
-            <View className="relative h-12 flex justify-center">
-              {/* Track Background */}
-              <View className="absolute left-0 right-0 h-2 bg-[#374151] rounded-full" />
-
-              {/* Progress Fill */}
-              <View
-                className="absolute left-0 h-2 bg-[#2ECC71] rounded-full"
-                style={{ width: `${((coinAmount - 1) / 999) * 100}%` }}
-              />
-
-              {/* Slider Thumb */}
-              <View
-                className="absolute"
-                style={{
-                  left: `${((coinAmount - 1) / 999) * 100}%`,
-                  transform: [{ translateX: -12 }],
-                }}
-              >
-                <View className="w-6 h-6 rounded-full bg-[#2ECC71] border-2 border-white" />
-              </View>
-
-              {/* Hidden Slider for Touch Handling */}
-              <Slider
-                minimumValue={1}
-                maximumValue={1000}
-                step={1}
-                value={coinAmount}
-                onValueChange={handleSliderChange}
-                minimumTrackTintColor="transparent"
-                maximumTrackTintColor="transparent"
-                thumbTintColor="transparent"
-                style={{
-                  width: "100%",
-                  height: 40,
-                  opacity: 0.01,
-                  position: "absolute",
-                  top: -4,
-                }}
-              />
-            </View>
-          </View>
-
-          {/* Slider Labels */}
-          <View className="flex-row justify-between px-1 mb-[-20px]">
-            <Text className="text-gray-400 text-sm ml-1">1</Text>
-            <Text className="text-gray-400 text-sm">1000</Text>
-          </View>
-
-          {/* Donation Amount Text */}
-          <Text className="text-center text-gray-400 text-base">
-            You are donating{" "}
-            <Text className="text-[#2ECC71] font-bold">{coinAmount} Coin</Text>
-          </Text>
-        </View>
-
-        {/* Beneficiary Type Section */}
-        <View className="rounded px-6 py-4 border border-[#2a4a3a]  mx-1 mb-6">
-          <View className="flex-row items-center mb-4 ml-[-15px]">
-            <Users size={24} color="#2ECC71" className="mr-3" />
-            <Text className="text-white text-xl font-bold ml-2">Choose Beneficiary Type</Text>
-          </View>
-
-          <View className="space-y-4">
-            {/* Auto Donation Option */}
-            <TouchableOpacity 
-              className={`mb-3 px-4 py-2 rounded-xl border-2 ${
-                selectedOption === 'auto' 
-                  ? 'border-[#2ECC71] bg-[#1e3a3a]' 
-                  : 'border-[#2d4a4a]'
-              }`}
-              onPress={() => setSelectedOption('auto')}
-            >
-              <View className="flex-row items-center">
-                <View className="mr-3 p-2 bg-[#2d4a4a] rounded-lg">
-                  <Shuffle size={20} color="#2ECC71" />
-                </View>
-                <View className="flex-1">
-                  <Text className="text-white font-semibold text-base">Auto Donate</Text>
-                  <Text className="text-gray-400 text-sm mt-1">
-                    Let us distribute your donation optimally
-                  </Text>
-                </View>
-                {selectedOption === 'auto' && (
-                  <View className="w-6 h-6 rounded-full bg-[#2ECC71] items-center justify-center">
-                    <Check size={16} color="white" />
-                  </View>
-                )}
-              </View>
-            </TouchableOpacity>
-
-            {/* Manual Donation Option */}
-            <TouchableOpacity 
-              className={`px-4 py-4 rounded-xl border-2 ${
-                selectedOption === 'manual' 
-                  ? 'border-[#2ECC71] bg-[#1e3a3a]' 
-                  : 'border-[#2d4a4a]'
-              }`}
-              onPress={() => setSelectedOption('manual')}
-            >
-              <View className="flex-row items-center">
-                <View className="mr-3 p-2 bg-[#2d4a4a] rounded-lg">
-                  <UserPlus size={20} color="#2ECC71" />
-                </View>
-                <View className="flex-1">
-                  <Text className="text-white font-semibold text-base">Choose Manually</Text>
-                  <Text className="text-gray-400 text-sm mt-1">
-                    Select specific beneficiaries
-                  </Text>
-                </View>
-                {selectedOption === 'manual' && (
-                  <View className="w-6 h-6 rounded-full bg-[#2ECC71] items-center justify-center">
-                    <Check size={16} color="white" />
-                  </View>
-                )}
-              </View>
-            </TouchableOpacity>
-          </View>
-
-          {/* Search Input (shown when manual is selected) */}
-          {selectedOption === "manual" && (
-            <View className="mt-4 bg-[#A6FACF] rounded-full flex-row items-center px-3 py-1">
-              <Search size={24} color="#1a2e2e" />
-              <TextInput
-                className="flex-1 ml-3 text-[#1a2e2e] text-base"
-                placeholder="Search for a mail......"
-                placeholderTextColor="#2a4a3a"
-                value={searchQuery}
-                onChangeText={setSearchQuery}
-              />
-            </View>
-          )}
-        </View>
-
-        {/* Horizontal Divider */}
-        <View className="h-[2px] bg-gray-700 my-4 mx-1 mt-[-8px]">
-          <View className="h-[1px] bg-[#2a4a3a] w-full" />
-        </View>
-
-        {/* Conversation Info */}
-        <View className="mb-[-30px]">
-          <Text className="text-white text-xl font-bold mb-[7px]">
-            Conversation Info
-          </Text>
-
-          <View className="space-y-1">
-            <View className="flex-row justify-between items-center py-[-10px]">
-              <Text className="text-gray-400 text-base">
-                100% of your donation goes Beneficiary
-              </Text>
-              <Text className="text-emerald-500 font-bold text-base">No fees</Text>
-            </View>
-
-            <View className="flex-row justify-between items-center py-1">
-              <Text className="text-gray-400 text-base">
-                Average donation size
-              </Text>
-              <Text className="text-white font-bold text-l">10kWh</Text>
-            </View>
-
-            <View className="flex-row justify-between items-center py-1">
-              <Text className="text-gray-400 text-base">
-                Average amount of donation
-              </Text>
-              <Text className="text-white font-bold text-l">RS 1500</Text>
-            </View>
-
-            <View className="flex-row justify-between items-center py-1">
-              <Text className="text-gray-400 text-base">
-                Average community impact
-              </Text>
-              <Text className="text-white font-bold text-l">5 householders</Text>
-            </View>
-          </View>
-        </View>
-      </ScrollView>
-
-      {/* Fixed Donate Now Button */}
-      <View className="absolute bottom-0 left-0 right-0 px-5 pb-6 pt-4">
+      {/* Amount Display */}
+      <View className="flex-row items-center justify-center mb-1">
         <TouchableOpacity
-          className="bg-[#2ECC71] rounded-full py-4"
-          onPress={handleDonateNow}
+          className="bg-white rounded-full w-14 h-14 items-center justify-center shadow-lg"
+          onPress={() => setCoinAmount(Math.max(COIN_LIMITS.min, coinAmount - 1))}
         >
-          <Text className="text-center text-black font-bold text-xl">
-            Donate Now
+          <Text className="text-[#1a2e2e] text-2xl font-bold">−</Text>
+        </TouchableOpacity>
+
+        <View className="mx-8 items-center">
+          <Text className="text-[#2ECC71] text-6xl font-bold">
+            {coinAmount}
           </Text>
+          <Text className="text-gray-400 text-base mt-1">Coins</Text>
+        </View>
+
+        <TouchableOpacity
+          className="bg-white rounded-full w-14 h-14 items-center justify-center shadow-lg"
+          onPress={() => setCoinAmount(Math.min(COIN_LIMITS.max, coinAmount + 1))}
+        >
+          <Text className="text-[#1a2e2e] text-2xl font-bold">+</Text>
         </TouchableOpacity>
       </View>
 
-      {/* Success Modal */}
-      <Modal
-        visible={showSuccessModal}
-        transparent={true}
-        animationType="fade"
-        onRequestClose={handleCloseModal}
-        statusBarTranslucent={true}
-      >
-        <View className="flex-1">
-          {/* StatusBar for the modal */}
-          <StatusBar 
-            barStyle="light-content"
-            backgroundColor="transparent"
-            translucent={true}
+      {/* Slider */}
+      <View className=" px-1">
+        <View className="relative h-12 flex justify-center">
+          <View className="absolute left-0 right-0 h-2 bg-[#374151] rounded-full" />
+          <View
+            className="absolute left-0 h-2 bg-[#2ECC71] rounded-full"
+            style={{ width: `${((coinAmount - COIN_LIMITS.min) / (COIN_LIMITS.max - COIN_LIMITS.min)) * 100}%` }}
           />
-          {/* Full-screen overlay with status bar color */}
-          <View className="absolute top-0 left-0 right-0 bottom-0 bg-[#122119] opacity-90" />
-          <View className="flex-1 justify-center items-center">
+          <View
+            className="absolute"
+            style={{
+              left: `${((coinAmount - COIN_LIMITS.min) / (COIN_LIMITS.max - COIN_LIMITS.min)) * 100}%`,
+              transform: [{ translateX: -12 }],
+            }}
+          >
+            <View className="w-6 h-6 rounded-full bg-[#2ECC71] border-4 border-white shadow-lg" />
+          </View>
+          <Slider
+            minimumValue={COIN_LIMITS.min}
+            maximumValue={COIN_LIMITS.max}
+            step={1}
+            value={coinAmount}
+            onValueChange={handleSliderChange}
+            minimumTrackTintColor="transparent"
+            maximumTrackTintColor="transparent"
+            thumbTintColor="transparent"
+            style={{
+              width: "100%",
+              height: 40,
+              opacity: 0.01,
+              position: "absolute",
+            }}
+          />
+        </View>
+      </View>
+
+      {/* Slider Labels */}
+      <View className="flex-row justify-between px-1 mb-4">
+        <Text className="text-gray-400 text-sm">{COIN_LIMITS.min}</Text>
+        <Text className="text-gray-400 text-sm">{COIN_LIMITS.max}</Text>
+      </View>
+
+      {/* Impact Preview */}
+      <View className="bg-[#1e3a3a] rounded-lg p-4 border border-[#2a4a3a]">
+        <Text className="text-center text-gray-300 text-base mb-3">
+          Your Impact
+        </Text>
+        <View className="flex-row justify-around">
+          <View className="items-center">
+            <Zap size={20} color={COLORS.warning} />
+            <Text className="text-white font-bold text-lg mt-1">{impact.kWh} kWh</Text>
+            <Text className="text-gray-400 text-xs">Energy</Text>
+          </View>
+          <View className="items-center">
+            <Home size={20} color={COLORS.primary} />
+            <Text className="text-white font-bold text-lg mt-1">{impact.families}</Text>
+            <Text className="text-gray-400 text-xs">Families</Text>
+          </View>
+          <View className="items-center">
+            <Coins size={20} color={COLORS.accent} />
+            <Text className="text-white font-bold text-lg mt-1">RS {(impact.avgCost).toFixed(2)}</Text>
+            <Text className="text-gray-400 text-xs">Value</Text>
+          </View>
+        </View>
+      </View>
+    </View>
+  );
+};
+
+interface BeneficiaryTypeCardProps {
+  selectedOption: "auto" | "manual";
+  setSelectedOption: (option: "auto" | "manual") => void;
+  searchQuery: string;
+  setSearchQuery: (query: string) => void;
+  filteredBeneficiaries: Beneficiary[];
+  selectedBeneficiary: Beneficiary | null;
+  setSelectedBeneficiary: (beneficiary: Beneficiary | null) => void;
+}
+
+const BeneficiaryTypeCard: React.FC<BeneficiaryTypeCardProps> = ({ selectedOption, setSelectedOption, searchQuery, setSearchQuery, filteredBeneficiaries, selectedBeneficiary, setSelectedBeneficiary }) => {
+  const handleBeneficiarySelect = (beneficiary: Beneficiary) => {
+    setSelectedBeneficiary(beneficiary);
+    setSearchQuery(''); // Clear search query to show selected beneficiary
+  };
+  return (
+    <View className="rounded-xl px-6 py-6 border-2 border-[#2a4a3a] mx-1 mb-5 bg-[#1a2e2e]/30">
+      <View className="flex-row items-center mb-5">
+        <Users size={24} color={COLORS.primary} />
+        <Text className="text-white text-xl font-bold ml-3">Choose Beneficiary Type</Text>
+      </View>
+
+      <View className="space-y-4">
+        {/* Auto Donation Option */}
+        <TouchableOpacity 
+          className={`mb-3 px-4 py-4 rounded-xl border-2 ${
+            selectedOption === 'auto' 
+              ? 'border-[#2ECC71] bg-[#1e3a3a]' 
+              : 'border-[#2d4a4a]'
+          }`}
+          onPress={() => setSelectedOption('auto')}
+        >
+          <View className="flex-row items-center">
+            <View className="mr-3 p-2 bg-[#2d4a4a] rounded-lg">
+              <Shuffle size={22} color={COLORS.primary} />
+            </View>
+            <View className="flex-1">
+              <Text className="text-white font-semibold text-base">Auto Donate</Text>
+              <Text className="text-gray-400 text-sm mt-1">
+                AI-powered optimal distribution
+              </Text>
+            </View>
+            {selectedOption === 'auto' && (
+              <View className="w-6 h-6 rounded-full bg-[#2ECC71] items-center justify-center">
+                <Check size={16} color="white" strokeWidth={3} />
+              </View>
+            )}
+          </View>
+        </TouchableOpacity>
+
+        {/* Manual Donation Option */}
+        <TouchableOpacity 
+          className={`px-4 py-4 rounded-xl border-2 ${
+            selectedOption === 'manual' 
+              ? 'border-[#2ECC71] bg-[#1e3a3a]' 
+              : 'border-[#2d4a4a]'
+          }`}
+          onPress={() => setSelectedOption('manual')}
+        >
+          <View className="flex-row items-center">
+            <View className="mr-3 p-2 bg-[#2d4a4a] rounded-lg">
+              <UserPlus size={22} color={COLORS.primary} />
+            </View>
+            <View className="flex-1">
+              <Text className="text-white font-semibold text-base">Choose Manually</Text>
+              <Text className="text-gray-400 text-sm mt-1">
+                Select specific beneficiaries
+              </Text>
+            </View>
+            {selectedOption === 'manual' && (
+              <View className="w-6 h-6 rounded-full bg-[#2ECC71] items-center justify-center">
+                <Check size={16} color="white" strokeWidth={3} />
+              </View>
+            )}
+          </View>
+        </TouchableOpacity>
+      </View>
+
+      {/* Search Input & Results */}
+      {selectedOption === "manual" && (
+        <View className="mt-3">
+          <View className="bg-[#eaf1ed90] rounded-3xl flex-row items-center px-4 py-1 mb-3 ">
+            <Search size={20} color="#1a2e2e" />
+            <TextInput
+              className="flex-1 ml-3 text-[#131e1e] text-base"
+              placeholder="Search beneficiaries by mail..."
+              placeholderTextColor="#2a4a3a"
+              value={searchQuery}
+              onChangeText={setSearchQuery}
+            />
+            {searchQuery.length > 0 && (
+              <TouchableOpacity onPress={() => setSearchQuery('')}>
+                <X size={20} color="#1a2e2e" />
+              </TouchableOpacity>
+            )}
+          </View>
+
+          {/* Beneficiary Results */}
+          {searchQuery.length > 0 && (
+            <View className="bg-[#1e3a3a] rounded-xl border border-[#2a4a3a] max-h-48">
+              <ScrollView showsVerticalScrollIndicator={false}>
+                {filteredBeneficiaries.length > 0 ? (
+                  filteredBeneficiaries.map((beneficiary: Beneficiary) => (
+                    <TouchableOpacity
+                      key={beneficiary.id}
+                      className={`px-4 py-3 border-b border-[#2a4a3a] ${
+                        selectedBeneficiary?.id === beneficiary.id ? 'bg-[#2a4a3a]' : ''
+                      }`}
+                      onPress={() => handleBeneficiarySelect(beneficiary)}
+                    >
+                      <View className="flex-row items-center justify-between">
+                        <View className="flex-1">
+                          <Text className="text-white font-semibold text-base">{beneficiary.name}</Text>
+                          <Text className="text-gray-400 text-sm">{beneficiary.email}</Text>
+                          <Text className="text-gray-500 text-xs mt-1">
+                            {beneficiary.location} • Needs: {beneficiary.needsKWh} kWh
+                          </Text>
+                        </View>
+                        {selectedBeneficiary?.id === beneficiary.id && (
+                          <Check size={20} color={COLORS.primary} strokeWidth={3} />
+                        )}
+                      </View>
+                    </TouchableOpacity>
+                  ))
+                ) : (
+                  <View className="px-4 py-6 items-center">
+                    <Text className="text-gray-400 text-base">No beneficiaries found</Text>
+                  </View>
+                )}
+              </ScrollView>
+            </View>
+          )}
+
+          {/* Selected Beneficiary Display */}
+          {selectedBeneficiary && (
+            <View className="bg-[#1e3a3a] rounded-xl border-2 border-[#2ECC71] px-4 py-3 mt-3">
+              <View className="flex-row items-center justify-between">
+                <View className="flex-1">
+                  <Text className="text-[#2ECC71] text-xs font-semibold mb-1">SELECTED BENEFICIARY</Text>
+                  <View className="flex-row items-center">
+                    <View className="bg-[#2d4a4a] w-10 h-10 rounded-full items-center justify-center mr-3 ">
+                      <UserPlus size={18} color={COLORS.primary} />
+                    </View>
+                    <View>
+                      <Text className="text-white font-semibold text-base">{selectedBeneficiary.name}</Text>
+                      <Text className="text-gray-400 text-sm">{selectedBeneficiary.email}</Text>
+                    </View>
+                  </View>
+                  <View className="ml-12 mt-2 flex-row items-center">
+                    <View className="bg-[#2a4a3a] px-2 py-1 rounded">
+                      <Text className="text-[#2ECC71] text-xs">{selectedBeneficiary.location}</Text>
+                    </View>
+                  </View>
+                </View>
+                <TouchableOpacity 
+                  onPress={() => setSelectedBeneficiary(null)}
+                  className="ml-2 p-1"
+                >
+                  <X size={20} color={COLORS.textSecondary} />
+                </TouchableOpacity>
+              </View>
+            </View>
+          )}
+        </View>
+      )}
+    </View>
+  );
+};
+
+interface ConversationInfoCardProps {
+  impact: DonationImpact;
+}
+
+const ConversationInfoCard: React.FC<ConversationInfoCardProps> = ({ impact }) => {
+  return (
+    <View className="mx-1">
+      <Text className="text-white text-xl font-bold mb-4">
+        Donation Transparency
+      </Text>
+
+      <View className="bg-[#1a2e2e]/30 rounded-xl border border-[#2a4a3a] px-5 py-4 mb-[-12px]">
+        <View className="space-y-3">
+          <View className="flex-row justify-between items-center py-2 border-b border-[#2a4a3a]/50">
+            <Text className="text-gray-300 text-base flex-1">
+              Platform fees
+            </Text>
+            <Text className="text-emerald-400 font-bold text-base">No fees</Text>
+          </View>
+
+          <View className="flex-row justify-between items-center py-2 border-b border-[#2a4a3a]/50">
+            <Text className="text-gray-300 text-base flex-1">
+              Average donation size
+            </Text>
+            <Text className="text-white font-semibold text-base">{impact.kWh} kWh</Text>
+          </View>
+
+          <View className="flex-row justify-between items-center py-2 border-b border-[#2a4a3a]/50">
+            <Text className="text-gray-300 text-base flex-1">
+              Average donation value
+            </Text>
+            <Text className="text-white font-semibold text-base">RS {(impact.avgCost).toFixed(2)}</Text>
+          </View>
+
+          <View className="flex-row justify-between items-center py-2">
+            <Text className="text-gray-300 text-base flex-1">
+               Community impact 
+            </Text>
+            <Text className="text-white font-semibold text-base">{impact.families} householders</Text>
+          </View>
+        </View>
+
+        <View className="mt-4 pt-4 border-t-2 border-[#2ECC71]/30">
+          <Text className="text-[#2ECC71] font-bold text-center text-base">
+            100% of your donation reaches beneficiaries
+          </Text>
+        </View>
+      </View>
+    </View>
+  );
+};
+
+interface SuccessModalProps {
+  visible: boolean;
+  onClose: () => void;
+  coinAmount: number;
+  impact: DonationImpact;
+  confettiAnims: Array<{
+    translateY: Animated.Value;
+    translateX: Animated.Value;
+    rotate: Animated.Value;
+    opacity: Animated.Value;
+  }>;
+  glowAnim: Animated.Value;
+  userName?: string;
+}
+
+const SuccessModal: React.FC<SuccessModalProps> = ({ visible, onClose, coinAmount, impact, confettiAnims, glowAnim, userName = "Friend" }) => {
+  return (
+    <Modal
+      visible={visible}
+      transparent={true}
+      animationType="fade"
+      onRequestClose={onClose}
+      statusBarTranslucent={true}
+    >
+      <View className="flex-1">
+        <StatusBar 
+          barStyle="light-content"
+          backgroundColor="transparent"
+          translucent={true}
+        />
+        <View className="absolute top-0 left-0 right-0 bottom-0 bg-[#122119] opacity-95" />
+        <View className="flex-1 justify-center items-center px-6">
           {/* Confetti */}
-          {confettiAnims.map((anim, index) => {
+          {confettiAnims.map((anim: any, index: number) => {
             const colors = [
-              "#2ECC71",
-              "#fbbf24",
-              "#ef4444",
-              "#3b82f6",
-              "#a855f7",
-              "#ec4899",
+              "#2ECC71", "#fbbf24", "#ef4444", "#3b82f6", "#a855f7", "#ec4899",
             ];
             const color = colors[index % colors.length];
             const size = Math.random() * 8 + 4;
@@ -418,21 +554,39 @@ export default function DonateNow() {
             );
           })}
 
-          <View className="bg-[#1a2e2e] rounded-3xl p-8 mx-8 items-center w-[85%]">
+          <View className="bg-[#1a2e2e] rounded-3xl p-8 w-full max-w-sm items-center border-2 border-[#2a4a3a]">
             {/* Success Icon */}
-            <View className="w-24 h-24 rounded-full bg-[#2ECC71] items-center justify-center mb-6">
+            <View className="w-24 h-24 rounded-full bg-[#2ECC71] items-center justify-center mb-6 shadow-lg">
               <Check size={48} color="white" strokeWidth={4} />
             </View>
 
             {/* Thank You Text */}
-            <Text className="text-white text-3xl font-bold mb-1 text-center">
-              Thank You, Gihan !
+            <Text className="text-white text-3xl font-bold mb-2 text-center">
+              Thank You, {userName}!
             </Text>
 
             {/* Success Message */}
-            <Text className="text-gray-300 text-base text-center mb-1 leading-6">
-              Your donation is helping 5 families today.
+            <Text className="text-gray-300 text-base text-center mb-2 leading-6">
+              Your donation of <Text className="text-[#2ECC71] font-bold">{coinAmount} coins</Text> is helping{' '}
+              <Text className="text-[#2ECC71] font-bold">{impact.families} families</Text> today.
             </Text>
+
+            {/* Impact Stats */}
+            <View className="bg-[#0f1f1f] rounded-xl p-4 w-full mb-6 border border-[#2a4a3a]">
+              <View className="flex-row justify-around">
+                <View className="items-center">
+                  <Zap size={24} color={COLORS.warning} />
+                  <Text className="text-white font-bold text-lg mt-1">{impact.kWh} kWh</Text>
+                  <Text className="text-gray-400 text-xs">Donated</Text>
+                </View>
+                <View className="w-px bg-[#2a4a3a]" />
+                <View className="items-center">
+                  <Home size={24} color={COLORS.primary} />
+                  <Text className="text-white font-bold text-lg mt-1">{impact.families}</Text>
+                  <Text className="text-gray-400 text-xs">Families</Text>
+                </View>
+              </View>
+            </View>
 
             {/* Radiating Light Bulb */}
             <View className="mb-6 items-center justify-center">
@@ -457,13 +611,13 @@ export default function DonateNow() {
                   ],
                 }}
               />
-               <Image source={images.build}  className="size-14" />
+              <Lightbulb size={56} color={COLORS.warning} fill={COLORS.warning} />
             </View>
 
             {/* Done Button */}
             <TouchableOpacity
-              className="bg-[#2ECC71] rounded-full py-3 px-10 w-full"
-              onPress={handleCloseModal}
+              className="bg-[#2ECC71] rounded-full py-4 px-10 w-full shadow-lg"
+              onPress={onClose}
             >
               <Text className="text-center text-black font-bold text-xl">
                 Done
@@ -472,7 +626,154 @@ export default function DonateNow() {
           </View>
         </View>
       </View>
-      </Modal>
+    </Modal>
+  );
+};
+
+// Main Component
+export default function DonateNow() {
+  const [coinAmount, setCoinAmount] = useState(10);
+  const [selectedOption, setSelectedOption] = useState<"auto" | "manual">("auto");
+  const [searchQuery, setSearchQuery] = useState("");
+  const [selectedBeneficiary, setSelectedBeneficiary] = useState<Beneficiary | null>(null);
+  const [showSuccessModal, setShowSuccessModal] = useState(false);
+  const [isLoading, setIsLoading] = useState(false);
+
+  // Custom hooks
+  const impact = useDonationImpact(coinAmount);
+  const confettiAnims = useConfettiAnimation(showSuccessModal);
+  const [glowAnim] = useState(new Animated.Value(0));
+
+  // Filter beneficiaries based on search
+  const filteredBeneficiaries = useMemo(() => {
+    if (!searchQuery) return mockBeneficiaries;
+    const query = searchQuery.toLowerCase();
+    return mockBeneficiaries.filter(
+      (b) =>
+        b.name.toLowerCase().includes(query) ||
+        b.email.toLowerCase().includes(query) ||
+        b.location.toLowerCase().includes(query)
+    );
+  }, [searchQuery]);
+
+  // Glow animation for success modal
+  useEffect(() => {
+    if (showSuccessModal) {
+      Animated.loop(
+        Animated.sequence([
+          Animated.timing(glowAnim, {
+            toValue: 1,
+            duration: ANIMATION.glowDuration,
+            easing: Easing.inOut(Easing.ease),
+            useNativeDriver: false,
+          }),
+        ])
+      ).start();
+    } else {
+      glowAnim.setValue(0);
+    }
+  }, [showSuccessModal]);
+
+  const handleDonateNow = async () => {
+    // Validation
+    if (selectedOption === 'manual' && !selectedBeneficiary) {
+      // In real app, show error toast
+      return;
+    }
+
+    setIsLoading(true);
+    
+    // Simulate API call
+    setTimeout(() => {
+      setIsLoading(false);
+      setShowSuccessModal(true);
+    }, 1000);
+  };
+
+  const handleCloseModal = () => {
+    setShowSuccessModal(false);
+    // Reset form
+    setCoinAmount(10);
+    setSelectedOption('auto');
+    setSearchQuery('');
+    setSelectedBeneficiary(null);
+  };
+
+  return (
+    <View className="flex-1 bg-[#122119]">
+      <StatusBar 
+        barStyle="light-content"
+        backgroundColor="#122119"
+        translucent={false}
+      />
+      <ScrollView
+        className="flex-1"
+        contentContainerStyle={{
+          paddingHorizontal: 16,
+          paddingBottom: 120,
+          paddingTop: 16,
+        }}
+        showsVerticalScrollIndicator={false}
+      >
+        {/* Donation Amount Section */}
+        <DonationAmountCard 
+          coinAmount={coinAmount}
+          setCoinAmount={setCoinAmount}
+          impact={impact}
+        />
+
+        {/* Beneficiary Type Section */}
+        <BeneficiaryTypeCard
+          selectedOption={selectedOption}
+          setSelectedOption={setSelectedOption}
+          searchQuery={searchQuery}
+          setSearchQuery={setSearchQuery}
+          filteredBeneficiaries={filteredBeneficiaries}
+          selectedBeneficiary={selectedBeneficiary}
+          setSelectedBeneficiary={setSelectedBeneficiary}
+        />
+
+        {/* Conversation Info */}
+        <ConversationInfoCard impact={impact} />
+      </ScrollView>
+
+      {/* Fixed Donate Now Button with Background */}
+      <View className="absolute bottom-0 left-0 right-0 ">
+        <View className="h-32 bg-gradient-to-t from-[#122119] via-[#122119] via-90% to-transparent" />
+        <View className="px-5 pb-6 pt-2 bg-[#122119]">
+        <TouchableOpacity
+          className={`rounded-full py-4 shadow-lg ${
+            isLoading ? 'bg-[#27AE60]' : 'bg-[#2ECC71]'
+          }`}
+          onPress={handleDonateNow}
+          disabled={isLoading || (selectedOption === 'manual' && !selectedBeneficiary)}
+        >
+          {isLoading ? (
+            <ActivityIndicator color="#000000" size="small" />
+          ) : (
+            <Text className="text-center text-black font-bold text-xl">
+              Donate Now
+            </Text>
+          )}
+        </TouchableOpacity>
+        {selectedOption === 'manual' && !selectedBeneficiary && (
+          <Text className="text-center text-gray-400 text-sm mt-2">
+            Please select a beneficiary
+          </Text>
+        )}
+        </View>
+      </View>
+
+      {/* Success Modal */}
+      <SuccessModal
+        visible={showSuccessModal}
+        onClose={handleCloseModal}
+        coinAmount={coinAmount}
+        impact={impact}
+        confettiAnims={confettiAnims}
+        glowAnim={glowAnim}
+        userName="Gihan"
+      />
     </View>
   );
 }

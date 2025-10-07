@@ -11,6 +11,8 @@ import knowdledgeH from "@/assets/icons/knowledgeH_i.png";
 import supportH from "@/assets/icons/supportH_i.png";
 import trackH from "@/assets/icons/trackH_i.png";
 import pay_bill from "@/assets/icons/pay_bill.png";
+import wallet from "@/assets/icons/wallet_i.png";
+
 
 export const icons = {
   home,
@@ -25,5 +27,6 @@ export const icons = {
   knowdledgeH,
   supportH,
   trackH,
-  pay_bill
+  pay_bill,
+  wallet
 };

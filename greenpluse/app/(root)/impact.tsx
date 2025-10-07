@@ -395,7 +395,7 @@ export default function Impact() {
                   activeOpacity={0.8}
                   onPress={() =>
                     router.push({
-                      pathname: "/(root)/stories/[id]",
+                      pathname: "/stories/[id]",
                       params: {
                         id: story.id,
                         title: story.title,
