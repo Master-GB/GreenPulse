@@ -116,7 +116,7 @@ export default function Donate() {
         </View>
 
         {/* MY Donation Section */}
-        <View className="mx-4 mb-[70px]">
+        <View className="mx-4 mb-[80px]">
           <Text className="text-white text-2xl font-bold mb-4">
             MY Donation
           </Text>

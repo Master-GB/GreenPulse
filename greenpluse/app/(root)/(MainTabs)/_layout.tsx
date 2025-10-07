@@ -1,116 +1,147 @@
-import { View, Text ,ImageBackground,Image} from 'react-native'
-import React from 'react'
-import {Tabs} from 'expo-router'
-import { images } from '@/constants/images'
-import { icons } from '@/constants/icons';
+import React from "react";
+import { View, Text, Image } from "react-native";
+import { Tabs } from "expo-router";
+import Animated, { useAnimatedStyle, withTiming } from "react-native-reanimated";
+import { LinearGradient } from "expo-linear-gradient";
+import { icons } from "@/constants/icons";
 
+type TabIconProps = {
+  focused: boolean;
+  icon: any;
+  text: string;
+  size?: number;
+};
 
-const TabIcon = ({focused,icon,text}:any) =>{
+const TabIcon = ({ focused, icon, text, size = 24 }: TabIconProps) => {
+  const animatedStyle = useAnimatedStyle(() => ({
+    transform: [{ scale: withTiming(focused ? 1.1 : 1, { duration: 150 }) }],
+  }));
 
-    
-
-      if(focused){
-          return(
-             <ImageBackground source={images.nav_highlight} className="flex flex-row  flex-1 min-w-[85px] min-h-24 mt-[12px] justify-center items-center overflow-hidden">
-                    <Image source={icon} tintColor="#16A34A" className="size-6" />
-                    <Text className="text-[#16A34A] text-base font-semibold ml-2">
-                         {text}
-                    </Text>
-                 </ImageBackground>
-          )
-      }
-    return(
-        <View className="size-full justify-center items-center mt-4 rounded-full">
-            <Image source={icon} tintColor="#ffffff" className="size-6 " />
-        </View>
-    )
-
-}
-
-const TabsLayout = () => {
   return (
-    <View style={{ flex: 1, backgroundColor: '#122119' }}>
+    <Animated.View
+      style={[
+        {
+          alignItems: "center",
+          justifyContent: "center",
+          width: 60,
+          paddingVertical: 6,
+          borderRadius: 16,
+          marginTop: 5,
+        },
+        animatedStyle,
+      ]}
+    >
+      <View
+        style={{
+          backgroundColor: focused ? "#16A34A" : "transparent",
+          borderRadius: 16,
+          padding: 8,
+        }}
+      >
+        <Image
+          source={icon}
+          style={{
+            width: size,
+            height: size,
+            tintColor: focused ? "#FFFFFF" : "#CFCFCF",
+          }}
+          resizeMode="contain"
+        />
+      </View>
+      {focused && (
+        <Text
+          style={{
+            color: "#FFFFFF",
+            fontSize: 11,
+            fontWeight: "600",
+            marginTop: 3,
+          }}
+        >
+          {text}
+        </Text>
+      )}
+    </Animated.View>
+  );
+};
+
+export default function TabsLayout() {
+  return (
+    <View style={{ flex: 1, backgroundColor: "#122119" }}>
       <Tabs
         screenOptions={{
+          headerShown: false,
           tabBarShowLabel: false,
-          tabBarItemStyle: {
-            width: '100%',
-            height: '100%',
-            justifyContent: 'center',
-            alignItems: 'center',
-          },
           tabBarStyle: {
-            backgroundColor: '#193326',
-            height: 50,
-            position: 'absolute',
-            overflow: 'hidden',
+            position: "absolute",
+            bottom: 0,
+            left: 20,
+            right: 20,
+            width: "auto",
+            height: 60,
+            backgroundColor: "#193326",
+            borderRadius: 20,
             borderWidth: 1,
-            borderColor: '#0F0D23',
+            borderColor: "#1C442E",
+            elevation: 8,
+            shadowColor: "#000",
+            shadowOpacity: 0.35,
+            shadowOffset: { width: 0, height: 2 },
+            shadowRadius: 6,
           },
+          tabBarBackground: () => (
+            <LinearGradient
+              colors={["#193326", "#193326"]}
+              start={{ x: 0, y: 0 }}
+              end={{ x: 0, y: 1 }}
+              style={{
+                flex: 1,
+                borderRadius: 20,
+              }}
+            />
+          ),
         }}
       >
         <Tabs.Screen
           name="index"
           options={{
-            title: 'Home',
-            headerShown: false,
             tabBarIcon: ({ focused }) => (
               <TabIcon focused={focused} icon={icons.home} text="Home" />
             ),
           }}
         />
-
-      <Tabs.Screen
-        name="donation"
-        options={{
-          title: 'Donate',
-          headerShown: false,
-          tabBarIcon: ({ focused }) => (
-            <TabIcon focused={focused} icon={icons.donate_n} text="Donate" />
-          ),
-        }}
-      />
-
-      <Tabs.Screen
-        name="project"
-        options={{
-          title: 'Project',
-          headerShown: false,
-          tabBarIcon: ({ focused }) => (
-            <TabIcon focused={focused} icon={icons.project} text="Project" />
-          ),
-        }}
-      />
-
-      <Tabs.Screen
-        name="trackEnergy"
-        options={{
-          title: 'Track',
-          headerShown: false,
-          tabBarIcon: ({ focused }) => (
-            <TabIcon focused={focused} icon={icons.track} text="Track" />
-          ),
-        }}
-      />
-
-      <Tabs.Screen
-        name="profile"
-        options={{
-          title: 'Profile',
-          headerShown: false,
-          tabBarIcon: ({ focused }) => (
-            <TabIcon focused={focused} icon={icons.profile} text="Profile" />
-          ),
-        }}
-      />
-
-      
-
-      
-
+        <Tabs.Screen
+          name="donation"
+          options={{
+            tabBarIcon: ({ focused }) => (
+              <TabIcon focused={focused} icon={icons.donate} text="Donate" size={28} />
+            ),
+          }}
+        />
+        <Tabs.Screen
+          name="project"
+          options={{
+            tabBarIcon: ({ focused }) => (
+              <TabIcon focused={focused} icon={icons.project} text="Projects" />
+            ),
+          }}
+        />
+        <Tabs.Screen
+          name="trackEnergy"
+          options={{
+            tabBarIcon: ({ focused }) => (
+              <TabIcon focused={focused} icon={icons.track} text="Track" />
+            ),
+          }}
+        />
+        <Tabs.Screen
+          name="profile"
+          options={{
+            tabBarIcon: ({ focused }) => (
+              <TabIcon focused={focused} icon={icons.profile} text="Profile" />
+            ),
+          }}
+        />
       </Tabs>
     </View>
-  )
+  );
 }
-
-export default TabsLayout

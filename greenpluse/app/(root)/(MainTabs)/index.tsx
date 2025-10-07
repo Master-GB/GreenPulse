@@ -148,7 +148,7 @@ export default function Home() {
         </View>
 
         {/* Impact Stories */}
-        <View className="mx-4 mb-[45px]">
+        <View className="mx-4 mb-[60px]">
           <View className="flex-row justify-between items-center mb-4">
             <Text className="text-white text-xl font-bold">Impact Stories</Text>
             <TouchableOpacity onPress={() => router.push('/(root)/impact')}>

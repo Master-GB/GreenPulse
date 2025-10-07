@@ -2,7 +2,6 @@ import { Stack } from "expo-router";
 import { StatusBar, View, Text, TouchableOpacity, Image } from "react-native";
 import { icons } from "@/constants/icons";
 import { useRouter } from "expo-router";
-import { StatusBar } from "expo-status-bar";
 
 // Reusable header that accepts a dynamic title
 type HeaderProps = { title: string };
