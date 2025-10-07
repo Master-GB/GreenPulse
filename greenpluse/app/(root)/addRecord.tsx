@@ -13,7 +13,7 @@ import React, { useState } from "react";
 import { Camera, Calendar, Edit3, Paperclip } from "lucide-react-native";
 import { useRouter } from "expo-router";
 import logoicon from "../../assets/images/GreenPluseLogo.png";
-import camImage from "../../assets/images/camerascanner.png";
+import camImage from "../../assets/images/camerascanner2.png";
 
 // Hide the default navigator header for this route
 export const options = {
@@ -92,8 +92,8 @@ const AddRecord = () => {
             </View>
 
             {/* Scanner Image */}
-            <View className="flex justify-center items-center h-40">
-              <Image source={camImage} className="w-40 h-14 ml-6 mb-10" />
+            <View className="flex justify-center items-center h-50">
+              <Image source={camImage} className="w-40 h-10 ml-6 mb-10" />
             </View>
           </View>
         </View>
