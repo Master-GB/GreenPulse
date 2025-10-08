@@ -860,7 +860,7 @@ export default function DonateNow() {
   const handleCloseModal = () => {
     setShowSuccessModal(false);
     // Reset form
-    setCoinAmount(10);
+    setCoinAmount(1);
     setSelectedOption("auto");
     setSearchQuery("");
     setSelectedBeneficiary(null);
@@ -909,8 +909,12 @@ export default function DonateNow() {
         <View className="h-32 bg-gradient-to-t from-[#122119] via-[#122119] via-90% to-transparent" />
         <View className="px-5 pb-6 pt-2 bg-[#122119]">
           <TouchableOpacity
-            className={`rounded-full py-4 shadow-lg ${
-              isLoading ? "bg-[#27AE60]" : "bg-[#2ECC71]"
+            className={` w-80 ml-6 rounded-full py-4 shadow-lg ${
+              isLoading 
+                ? "bg-[#27AE60]" 
+                : (selectedOption === "manual" && !selectedBeneficiary) 
+                  ? "bg-[#4bdb8784]" 
+                  : "bg-[#2ECC71]"
             }`}
             onPress={handleDonateNow}
             disabled={
@@ -941,7 +945,7 @@ export default function DonateNow() {
         impact={impact}
         confettiAnims={confettiAnims}
         glowAnim={glowAnim}
-        userName="Gihan"
+        userName={user?.displayName || user?.email?.split('@')[0] || 'there'}
       />
     </View>
   );

@@ -12,6 +12,9 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
+import { collection, addDoc, serverTimestamp } from 'firebase/firestore';
+import { auth, db } from '../../config/firebaseConfig';
+import { useAuth } from '../../contexts/AuthContext';
 
 interface Provider {
   id: string;
@@ -20,7 +23,9 @@ interface Provider {
 
 const AddUtility = () => {
   const router = useRouter();
+  const { user } = useAuth();
   
+  // Form state
   const [selectedProvider, setSelectedProvider] = useState('');
   const [accountNumber, setAccountNumber] = useState('');
   const [accountNickname, setAccountNickname] = useState('');
@@ -29,6 +34,10 @@ const AddUtility = () => {
   const [showProviderModal, setShowProviderModal] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [showSuccessModal, setShowSuccessModal] = useState(false);
+  const [showErrorModal, setShowErrorModal] = useState(false);
+  const [errorMessage, setErrorMessage] = useState('');
+  
+  // Form errors
   const [errors, setErrors] = useState({
     provider: '',
     accountNumber: '',
@@ -36,92 +45,146 @@ const AddUtility = () => {
     address: '',
     autoVerify: ''
   });
-  const providers: Provider[] = [
-    { id: '1', name: '(CEB)Ceylon Electricity Board' },
-    { id: '3', name: 'LECO (Lanka Electric)' },
-  ];
 
+  // Track user interaction for live validation
+  const [touched, setTouched] = useState({
+    provider: false,
+    accountNumber: false,
+    nickname: false,
+    address: false,
+    autoVerify: false,
+  });
+
+  // Single-field validation helper
+  const validateField = (field: keyof typeof errors, value?: string | boolean): string => {
+    switch (field) {
+      case 'provider':
+        return selectedProvider ? '' : 'Please select a provider';
+      case 'accountNumber': {
+        const v = (typeof value === 'string' ? value : accountNumber).trim();
+        if (!v) return 'Account number is required';
+        if (v.length !== 10) return 'Account number must be 10 digits';
+        return '';
+      }
+      case 'nickname': {
+        const v = (typeof value === 'string' ? value : accountNickname).trim();
+        if (!v) return 'Nickname is required';
+        if (v.length < 3) return 'Nickname must be at least 3 characters';
+        if (v.length > 10) return 'Nickname must be 10 characters or less';
+        return '';
+      }
+      case 'address': {
+        const v = (typeof value === 'string' ? value : serviceAddress).trim();
+        if (!v) return 'Service address is required';
+        if (v.length < 10) return 'Please enter a complete address';
+        return '';
+      }
+      case 'autoVerify': {
+        const v = typeof value === 'boolean' ? value : autoVerify;
+        return v ? '' : 'You must enable auto-verification';
+      }
+      default:
+        return '';
+    }
+  };
+  
+  // Providers list
+  const providers: Provider[] = [
+    { id: '1', name: '(CEB) Ceylon Electricity Board' },
+    { id: '2', name: 'LECO (Lanka Electricity Company)' },
+  ];
+  
+  // Form validation
   const isFormValid = (): boolean => {
     return (
       !!selectedProvider &&
-      accountNumber.trim().length > 0 &&
-      accountNickname.trim().length > 0 &&
-      serviceAddress.trim().length > 0 &&
+      accountNumber.trim().length === 10 &&
+      accountNickname.trim().length >= 2 &&
+      accountNickname.trim().length <= 10 &&
+      serviceAddress.trim().length >= 10 &&
       autoVerify
     );
   };
-
+  
   const validateForm = (): boolean => {
     const newErrors = {
-      provider: '',
-      accountNumber: '',
-      nickname: '',
-      address: '',
-      autoVerify: ''
+      provider: !selectedProvider ? 'Please select a provider' : '',
+      accountNumber: 
+        !accountNumber ? 'Account number is required' :
+        accountNumber.length !== 10 ? 'Account number must be 10 digits' : '',
+      nickname: 
+        !accountNickname ? 'Nickname is required' :
+        accountNickname.length < 2 ? 'Nickname must be at least 2 characters' :
+        accountNickname.length > 10 ? 'Nickname must be 10 characters or less' : '',
+      address: 
+        !serviceAddress ? 'Service address is required' :
+        serviceAddress.length < 10 ? 'Please enter a complete address' : '',
+      autoVerify: !autoVerify ? 'You must enable auto-verification' : ''
     };
-
-    let isValid = true;
-
-    if (!selectedProvider) {
-      newErrors.provider = 'Please select a provider';
-      isValid = false;
-    }
-
-    if (!accountNumber.trim()) {
-      newErrors.accountNumber = 'Account number is required';
-      isValid = false;
-    } else if (accountNumber.length !== 10) {
-      newErrors.accountNumber = 'Account number must be 10 characters';
-      isValid = false;
-    }
-
-    if (!accountNickname.trim()) {
-      newErrors.nickname = 'Account nickname is required';
-      isValid = false;
-    } else if (accountNickname.length > 10) {
-      newErrors.nickname = 'Nickname must be 10 characters or less';
-      isValid = false;
-    } else if (accountNickname.length < 2) {
-      newErrors.nickname = 'Please enter a suitable nickname';
-      isValid = false;
-    }
-
-    if (!serviceAddress.trim()) {
-      newErrors.address = 'Service address is required';
-      isValid = false;
-    } else if (serviceAddress.length < 10) {
-      newErrors.address = 'Please enter a complete address';
-      isValid = false;
-    }
-
-    // Validate auto-verify toggle
-    if (!autoVerify) {
-      newErrors.autoVerify = 'You must enable auto-verification to continue';
-      isValid = false;
-    }
-
+    
     setErrors(newErrors);
-    return isValid;
+    return Object.values(newErrors).every(error => !error);
   };
-
+  
+  // Handle provider selection
   const handleProviderSelect = (provider: Provider) => {
     setSelectedProvider(provider.name);
     setShowProviderModal(false);
-    setErrors({ ...errors, provider: '' });
+    setErrors(prev => ({ ...prev, provider: '' }));
+    setTouched(prev => ({ ...prev, provider: true }));
   };
 
+  // Show error message
+  const showError = (message: string) => {
+    setErrorMessage(message);
+    setShowErrorModal(true);
+  };
+
+  // Handle save account
   const handleSaveAccount = async () => {
     if (!validateForm()) {
+      // surface all inline errors
+      setTouched({
+        provider: true,
+        accountNumber: true,
+        nickname: true,
+        address: true,
+        autoVerify: true,
+      });
+      return;
+    }
+
+    if (!user) {
+      showError('You must be logged in to save an account');
       return;
     }
 
     setIsLoading(true);
 
-    // Simulate API call
-    setTimeout(() => {
-      setIsLoading(false);
+    try {
+      // Save to Firestore
+      const utilityAccount = {
+        userId: user.uid,
+        provider: selectedProvider,
+        accountNumber: accountNumber.trim(),
+        accountNickname: accountNickname.trim(),
+        serviceAddress: serviceAddress.trim(),
+        autoVerify,
+        createdAt: serverTimestamp(),
+        updatedAt: serverTimestamp(),
+        isActive: true
+      };
+
+      const docRef = await addDoc(collection(db, 'utilityAccounts'), utilityAccount);
+      console.log('Document written with ID: ', docRef.id);
+      
       setShowSuccessModal(true);
-    }, 2000);
+    } catch (error) {
+      console.error('Error saving utility account:', error);
+      showError('Failed to save utility account. Please check your connection and try again.');
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   const handleSuccessContinue = () => {
@@ -162,14 +225,19 @@ const AddUtility = () => {
                 className={`bg-[#2a3a3a] rounded-xl px-4 py-4 flex-row items-center justify-between ${
                   errors.provider ? 'border-2 border-red-500' : ''
                 }`}
-                onPress={() => setShowProviderModal(true)}
+                onPress={() => {
+                  setTouched(prev => ({ ...prev, provider: true }));
+                  const msg = validateField('provider');
+                  setErrors(prev => ({ ...prev, provider: msg }));
+                  setShowProviderModal(true);
+                }}
               >
                 <Text className={selectedProvider ? 'text-white' : 'text-gray-500'}>
                   {selectedProvider || 'Select Provider'}
                 </Text>
                 <Ionicons name="chevron-down" size={20} color="#fff" />
               </TouchableOpacity>
-              {errors.provider ? (
+              {errors.provider && touched.provider ? (
                 <Text className="text-red-500 text-xs mt-1">{errors.provider}</Text>
               ) : null}
             </View>
@@ -188,11 +256,17 @@ const AddUtility = () => {
                 value={accountNumber}
                 onChangeText={(text) => {
                   setAccountNumber(text);
-                  setErrors({ ...errors, accountNumber: '' });
+                  const msg = validateField('accountNumber', text);
+                  setErrors(prev => ({ ...prev, accountNumber: msg }));
+                }}
+                onBlur={() => {
+                  setTouched(prev => ({ ...prev, accountNumber: true }));
+                  const msg = validateField('accountNumber');
+                  setErrors(prev => ({ ...prev, accountNumber: msg }));
                 }}
                 keyboardType="numeric"
               />
-              {errors.accountNumber ? (
+              {errors.accountNumber && touched.accountNumber ? (
                 <Text className="text-red-500 text-xs mt-1">{errors.accountNumber}</Text>
               ) : null}
             </View>
@@ -211,10 +285,16 @@ const AddUtility = () => {
                 value={accountNickname}
                 onChangeText={(text) => {
                   setAccountNickname(text);
-                  setErrors({ ...errors, nickname: '' });
+                  const msg = validateField('nickname', text);
+                  setErrors(prev => ({ ...prev, nickname: msg }));
+                }}
+                onBlur={() => {
+                  setTouched(prev => ({ ...prev, nickname: true }));
+                  const msg = validateField('nickname');
+                  setErrors(prev => ({ ...prev, nickname: msg }));
                 }}
               />
-              {errors.nickname ? (
+              {errors.nickname && touched.nickname ? (
                 <Text className="text-red-500 text-xs mt-1">{errors.nickname}</Text>
               ) : null}
             </View>
@@ -233,13 +313,19 @@ const AddUtility = () => {
                 value={serviceAddress}
                 onChangeText={(text) => {
                   setServiceAddress(text);
-                  setErrors({ ...errors, address: '' });
+                  const msg = validateField('address', text);
+                  setErrors(prev => ({ ...prev, address: msg }));
+                }}
+                onBlur={() => {
+                  setTouched(prev => ({ ...prev, address: true }));
+                  const msg = validateField('address');
+                  setErrors(prev => ({ ...prev, address: msg }));
                 }}
                 multiline
                 numberOfLines={3}
                 textAlignVertical="top"
               />
-              {errors.address ? (
+              {errors.address && touched.address ? (
                 <Text className="text-red-500 text-xs mt-1">{errors.address}</Text>
               ) : null}
             </View>
@@ -248,7 +334,13 @@ const AddUtility = () => {
             <View className="mt-2">
               <TouchableOpacity
                 className="flex-row items-center"
-                onPress={() => setAutoVerify(!autoVerify)}
+                onPress={() => {
+                  const next = !autoVerify;
+                  setAutoVerify(next);
+                  setTouched(prev => ({ ...prev, autoVerify: true }));
+                  const msg = validateField('autoVerify', next);
+                  setErrors(prev => ({ ...prev, autoVerify: msg }));
+                }}
               >
                 <View
                   className={`w-6 h-6 rounded-md border-2 mr-3 items-center justify-center ${
@@ -261,7 +353,7 @@ const AddUtility = () => {
                   Auto-verify account with utility data
                 </Text>
               </TouchableOpacity>
-              {errors.autoVerify ? (
+              {errors.autoVerify && touched.autoVerify ? (
                 <Text className="text-red-500 text-xs mt-1 ml-9">{errors.autoVerify}</Text>
               ) : null}
             </View>
@@ -327,7 +419,12 @@ const AddUtility = () => {
 
             <TouchableOpacity
               className="p-4 border-t border-[#2a4444]"
-              onPress={() => setShowProviderModal(false)}
+              onPress={() => {
+                setTouched(prev => ({ ...prev, provider: true }));
+                const msg = validateField('provider');
+                setErrors(prev => ({ ...prev, provider: msg }));
+                setShowProviderModal(false);
+              }}
             >
               <Text className="text-[#00ff88] text-center font-semibold">Close</Text>
             </TouchableOpacity>
@@ -359,13 +456,82 @@ const AddUtility = () => {
             {/* Divider */}
             <View className="h-px bg-[#2a4444] w-full" />
 
-            {/* Action Button */}
+            {/* Footer */}
             <TouchableOpacity
-              className="py-4 items-center"
+              className="py-4"
               onPress={handleSuccessContinue}
-              activeOpacity={0.8}
             >
-              <Text className="text-[#00ff88] text-base font-semibold">Continue</Text>
+              <Text className="text-center text-[#00ff88] font-semibold">Continue</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
+
+      {/* Error Modal */}
+      <Modal
+        visible={showErrorModal}
+        transparent
+        animationType="fade"
+        statusBarTranslucent
+        onRequestClose={() => setShowErrorModal(false)}
+      >
+        <View className="flex-1 bg-[#122119] opacity-90 justify-center items-center p-5">
+          <View className="bg-[#1a3333] rounded-2xl w-full max-w-sm overflow-hidden border border-red-500/30">
+            {/* Header */}
+            <View className="items-center p-6">
+              <View className="bg-red-500 rounded-full p-3 mb-4">
+                <Ionicons name="warning" size={32} color="#fff" />
+              </View>
+              <Text className="text-white text-xl font-bold mb-2">Error</Text>
+              <Text className="text-gray-300 text-center">
+                {errorMessage}
+              </Text>
+            </View>
+
+            {/* Divider */}
+            <View className="h-px bg-[#2a4444] w-full" />
+
+            {/* Footer */}
+            <TouchableOpacity
+              className="py-4"
+              onPress={() => setShowErrorModal(false)}
+            >
+              <Text className="text-center text-red-500 font-semibold">Try Again</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
+
+      {/* Error Modal */}
+      <Modal
+        visible={showErrorModal}
+        transparent
+        animationType="fade"
+        statusBarTranslucent
+        onRequestClose={() => setShowErrorModal(false)}
+      >
+        <View className="flex-1 bg-[#122119] opacity-90 justify-center items-center p-5">
+          <View className="bg-[#1a3333] rounded-2xl w-full max-w-sm overflow-hidden border border-red-500/30">
+            {/* Header */}
+            <View className="items-center p-6">
+              <View className="bg-red-500 rounded-full p-3 mb-4">
+                <Ionicons name="warning" size={32} color="#fff" />
+              </View>
+              <Text className="text-white text-xl font-bold mb-2">Error</Text>
+              <Text className="text-gray-300 text-center">
+                {errorMessage}
+              </Text>
+            </View>
+
+            {/* Divider */}
+            <View className="h-px bg-[#2a4444] w-full" />
+
+            {/* Footer */}
+            <TouchableOpacity
+              className="py-4"
+              onPress={() => setShowErrorModal(false)}
+            >
+              <Text className="text-center text-red-500 font-semibold">Try Again</Text>
             </TouchableOpacity>
           </View>
         </View>
