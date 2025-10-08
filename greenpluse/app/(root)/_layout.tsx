@@ -2,24 +2,40 @@ import { Stack } from "expo-router";
 import { StatusBar, View, Text, TouchableOpacity, Image } from "react-native";
 import { icons } from "@/constants/icons";
 import { useRouter } from "expo-router";
-import { StatusBar } from "expo-status-bar";
+import ProtectedRoute from '../../components/ProtectedRoute';
 
 // Reusable header that accepts a dynamic title
 type HeaderProps = { title: string };
 function AppHeader({ title }: HeaderProps) {
   const router = useRouter();
   return (
-    <View className="flex-1 flex-row items-center px-2 mb-2">
-      <View className="absolute left-0 right-[70px] items-center">
+    <View className="w-full flex-row items-center justify-between px-2 mb-2">
+      <View className="flex-1 items-center">
         <Text className="text-white text-xl font-bold">{title}</Text>
       </View>
       <TouchableOpacity
-        className="ml-52 bg-[#2a3e3e] rounded-full px-4 py-2 flex-row items-center gap-1 "
-        onPress={() => router.push("/(root)/wallet")}
+        activeOpacity={0.6}
+        className="bg-[#2a3e3e] rounded-full px-4 py-2 flex-row items-center"
+        onPress={(e) => {
+          e.preventDefault();
+          console.log('Wallet button pressed');
+          router.push("/wallet");
+        }}
+        onPressIn={(e) => e.stopPropagation()}
+        hitSlop={{ top: 20, bottom: 20, left: 20, right: 20 }}
+        style={{
+          zIndex: 5,
+        }}
       >
-        <Image source={icons.coinH} className="w-5 h-5" />
-        <Text className="text-white font-semibold">120</Text>
-        <Text className="text-gray-400 text-sm">/5</Text>
+        <Image 
+          source={icons.coinH} 
+          className="w-5 h-5" 
+          resizeMode="contain"
+        />
+        <View className="flex-row items-baseline ml-1">
+          <Text className="text-white font-semibold">120</Text>
+          <Text className="text-gray-400 text-sm">/5</Text>
+        </View>
       </TouchableOpacity>
     </View>
   );
@@ -27,12 +43,14 @@ function AppHeader({ title }: HeaderProps) {
 
 export default function RootLayout() {
   return (
+    <ProtectedRoute>
     <View style={{ flex: 1, backgroundColor: "#122119" }}>
       <StatusBar hidden={true} backgroundColor="#122119" />
       <Stack
         screenOptions={{
           contentStyle: { backgroundColor: "#122119" },
           animation: "slide_from_right",
+          // Add these to prevent white flash
           headerTransparent: false,
           headerStyle: {
             backgroundColor: "#122119",
@@ -60,9 +78,14 @@ export default function RootLayout() {
             headerBackground: () => (
               <View style={{ flex: 1, backgroundColor: "#122119" }} />
             ),
+
+            // Add this to handle the transition better
             animationTypeForReplace: "push",
           }}
         />
+
+        {/* AddRecord route: hide header explicitly so parent layout doesn't force it */}
+        <Stack.Screen name="addRecord" options={{ headerShown: false }} />
 
         <Stack.Screen
           name="impact"
@@ -106,6 +129,8 @@ export default function RootLayout() {
             headerBackground: () => (
               <View style={{ flex: 1, backgroundColor: "#122119" }} />
             ),
+
+            // Add this to handle the transition better
             animationTypeForReplace: "push",
           }}
         />
@@ -129,6 +154,8 @@ export default function RootLayout() {
             headerBackground: () => (
               <View style={{ flex: 1, backgroundColor: "#122119" }} />
             ),
+
+            // Add this to handle the transition better
             animationTypeForReplace: "push",
           }}
         />
@@ -161,6 +188,29 @@ export default function RootLayout() {
           options={{
             headerShown: true,
             headerTitle: () => <AppHeader title="Add Account" />,
+            headerStyle: {
+              backgroundColor: "#122119",
+            },
+            headerTintColor: "#fff",
+            animation: "slide_from_right",
+            gestureEnabled: true,
+            fullScreenGestureEnabled: true,
+            contentStyle: { backgroundColor: "#122119" },
+            presentation: "card",
+            headerShadowVisible: false,
+            headerTransparent: false,
+            headerBackground: () => (
+              <View style={{ flex: 1, backgroundColor: "#122119" }} />
+            ),
+            animationTypeForReplace: "push",
+          }}
+        />
+
+         <Stack.Screen
+          name="bill_payment_summary"
+          options={{
+            headerShown: true,
+            headerTitle: () => <AppHeader title="Bill Payment" />,
             headerStyle: {
               backgroundColor: "#122119",
             },
@@ -215,6 +265,6 @@ export default function RootLayout() {
 
       </Stack>
     </View>
-
+   </ProtectedRoute>
   );
 }
