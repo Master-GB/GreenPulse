@@ -4,6 +4,7 @@ import welcomeB from "@/assets/images/welcomeB.jpg";
 import logo from "@/assets/images/GreenPluseLogo.png";
 import build from "@/assets/images/build_i.png";
 import impactImage from "@/assets/images/impact_image.png";
+import light_bill from "@/assets/images/light_bill.jpg";
 
 export const images = {
   nav_back,
@@ -11,5 +12,6 @@ export const images = {
   welcomeB,
   logo,
   build,
-  impactImage
+  impactImage,
+  light_bill
 };
