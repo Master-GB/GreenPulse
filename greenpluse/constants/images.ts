@@ -2,10 +2,14 @@ import nav_back from "@/assets/images/nav_back.png";
 import nav_highlight from "@/assets/images/nav_highlight.png";
 import welcomeB from "@/assets/images/welcomeB.jpg";
 import logo from "@/assets/images/GreenPluseLogo.png";
+import build from "@/assets/images/build_i.png";
+import impactImage from "@/assets/images/impact_image.png";
 
 export const images = {
   nav_back,
   nav_highlight,
   welcomeB,
-  logo
+  logo,
+  build,
+  impactImage
 };
