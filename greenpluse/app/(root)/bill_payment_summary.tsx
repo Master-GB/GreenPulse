@@ -12,19 +12,23 @@ import {
 import React, { useState, useEffect, useCallback } from "react";
 import Slider from "@react-native-community/slider";
 import { Ionicons } from "@expo/vector-icons";
-import { useRouter,useLocalSearchParams } from "expo-router";
+import { useRouter, useLocalSearchParams } from "expo-router";
 import * as ImagePicker from "expo-image-picker";
 import * as DocumentPicker from "expo-document-picker";
 // Using legacy API to avoid deprecation warnings
 import * as FileSystem from "expo-file-system/legacy";
 import * as ImageManipulator from "expo-image-manipulator";
+import { Linking, ImageBackground } from 'react-native';
+// Firebase
+import { collection, addDoc, serverTimestamp } from 'firebase/firestore';
+import { db } from '../../config/firebaseConfig';
+import { useAuth } from '../../contexts/AuthContext';
 
 
   interface BillData {
     currentBill: number;
     creditAvailable: number;
     creditConversionRate: number;
-    dueDate: string;
 }
 
 // Add this type definition near your other interfaces
@@ -38,9 +42,9 @@ type BillParams = {
 };
 
 const BillPayment = () => {
-  
-    const params = useLocalSearchParams<BillParams>();
-  const router = useRouter();
+  const { user } = useAuth();
+  const params = useLocalSearchParams<BillParams>();
+ 
 
   
  
@@ -51,35 +55,46 @@ const BillPayment = () => {
   const [showSuccessModal, setShowSuccessModal] = useState(false);
   const [showCreditError, setShowCreditError] = useState(false);
   const [showLearnMore, setShowLearnMore] = useState(false);
+  const [showOcrResult, setShowOcrResult] = useState(false);
+  const [ocrResult, setOcrResult] = useState<{accountNo?: string, amount?: number, meterReading?: string}>({});
 
    const [billData, setBillData] = useState<BillData>({
     currentBill: 0,
     creditAvailable: params.credits ? parseFloat(params.credits) * 23.38 : 1100.0,
     creditConversionRate: 91,
-    dueDate: "2/10/2025",
   });
 
   // Controlled input for Current Bill (user-entered)
   const [currentBillInput, setCurrentBillInput] = useState<string>("");
   const [isOcrLoading, setIsOcrLoading] = useState(false);
 
-  
-
   // OCR helpers
   const parseOcrText = (text: string) => {
     // Try multiple patterns commonly found on bills/SMS
-    const accountMatch = text.match(/(?:Account\s*(?:No|Number)\s*[:#-]?\s*)([A-Za-z0-9\-\/]+)/i);
+    const accountMatch = text.match(/(?:A\/C\s*No\.?\s*[:#-]?\s*|Account\s*(?:No|Number)\s*[:#-]?\s*)([A-Za-z0-9\-\/]+)/i) || text.match(/AC\s*No\.?\s*[:#-]?\s*([A-Za-z0-9\-\/]+)/i) || text.match(/Account\s*(?:No|Number)\s*[:#-]?\s*([A-Za-z0-9\-\/]+)/i);
     const amountMatch = text.match(/(?:Total\s*Due|Amount\s*Due|Bill\s*Amount|Current\s*Bill)\s*[:#-]?\s*Rs?\.?\s*([0-9,.]+)/i) || text.match(/Rs\.?\s*([0-9,.]+)/i);
-    const dateMatch = text.match(/(?:Due\s*Date|Due\s*on|Payment\s*Due)\s*[:#-]?\s*([0-3]?\d[\/-][0-1]?\d[\/-](?:\d{2}|\d{4}))/i);
-    const meterMatch = text.match(/(?:Meter\s*(?:Reading|No\.?))\s*[:#-]?\s*([A-Za-z0-9\-]+)/i) || text.match(/Reading\s*[:#-]?\s*([0-9,.]+)/i);
+    
+    // Find all numbers that look like meter readings (4-6 digits)
+    const meterReadings = text.match(/\b\d{4,6}\b/g) || [];
+    const numericReadings = meterReadings.map(Number);
+    
+    // Sort in descending order to get the two highest readings
+    const [currentReading, previousReading] = [...numericReadings].sort((a, b) => b - a).slice(0, 2);
+    
+    // Calculate monthly usage if we have both current and previous readings
+    let meterReading: string | undefined;
+    if (currentReading && previousReading && currentReading > previousReading) {
+      const usage = currentReading - previousReading;
+      meterReading = `${usage} (${previousReading} → ${currentReading})`;
+    } else if (currentReading) {
+      meterReading = currentReading.toString();
+    }
 
     const accountNo = accountMatch ? accountMatch[1].trim() : undefined;
     const amountStr = amountMatch ? amountMatch[1].replace(/,/g, "").trim() : undefined;
     const amount = amountStr ? parseFloat(amountStr) : undefined;
-    const dueDate = dateMatch ? dateMatch[1].trim() : undefined;
-    const meterReading = meterMatch ? meterMatch[1].trim() : undefined;
 
-    return { accountNo, amount, dueDate, meterReading };
+    return { accountNo, amount, meterReading };
   };
 
   const runOcrOnBase64 = async (mime: string, base64: string) => {
@@ -123,59 +138,41 @@ const BillPayment = () => {
         throw new Error(apiMsg || "OCR failed to extract text");
       }
 
-      const { accountNo, amount, dueDate, meterReading } = parseOcrText(parsedText);
+      const result = parseOcrText(parsedText);
+      setOcrResult(result);
 
-      if (amount !== undefined) {
-        setCurrentBillInput(amount.toString());
-        setBillData((prev) => ({ ...prev, currentBill: amount }));
+      if (result.amount !== undefined) {
+        setCurrentBillInput(result.amount.toString());
+        setBillData((prev) => ({ ...prev, currentBill: result.amount as number }));
       }
-      if (dueDate) {
-        setBillData((prev) => ({ ...prev, dueDate }));
-      }
-
-      Alert.alert(
-        "OCR Result",
-        `Account: ${accountNo ?? "-"}\nAmount: ${amount ?? "-"}\nDue: ${dueDate ?? "-"}\nMeter: ${meterReading ?? "-"}`
-      );
+      
+      setShowOcrResult(true);
     } catch (e: any) {
-      Alert.alert("OCR Error", e?.message || "Failed to run OCR");
+      setOcrResult({
+        accountNo: undefined,
+        amount: undefined,
+        meterReading: undefined
+      });
+      setShowOcrResult(true);
     } finally {
       setIsOcrLoading(false);
     }
   };
 
-  const handlePickImage = async () => {
-    try {
-      const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
-      if (status !== "granted") {
-        Alert.alert("Permission required", "Please allow photo library access.");
-        return;
-      }
-      const result = await ImagePicker.launchImageLibraryAsync({
-        mediaTypes: ImagePicker.MediaTypeOptions.Images,
-        quality: 0.8,
-        base64: true, // Get base64 directly from ImagePicker
-      });
-      
-      if (result.canceled || !result.assets?.[0]) return;
-      
-      const asset = result.assets[0];
-      if (!asset.base64) {
-        throw new Error('Failed to process image');
-      }
-      
-      await runOcrOnBase64(asset.mimeType || 'image/jpeg', asset.base64);
-    } catch (error) {
-      console.error('Image picker error:', error);
-      Alert.alert('Error', 'Failed to process the selected image');
-    }
-  };
+  
 
   const handleOpenCamera = async () => {
     try {
       const { status } = await ImagePicker.requestCameraPermissionsAsync();
       if (status !== "granted") {
-        Alert.alert("Permission required", "Please allow camera access.");
+        Alert.alert(
+          "Camera Access Required",
+          "To scan your bill, we need access to your camera. This helps us read the bill details accurately.",
+          [
+            { text: "Open Settings", onPress: () => Linking.openSettings() },
+            { text: "Not Now", style: "cancel" }
+          ]
+        );
         return;
       }
       const result = await ImagePicker.launchCameraAsync({
@@ -233,7 +230,13 @@ const BillPayment = () => {
       await runOcrOnBase64(mime, base64);
     } catch (error) {
       console.error('Document picker error:', error);
-      Alert.alert('Error', error instanceof Error ? error.message : 'Failed to process the selected document');
+      Alert.alert(
+        "Document Error",
+        error instanceof Error && error.message 
+          ? `Error: ${error.message}`
+          : "We couldn't process the selected document. Please ensure it's a clear image or PDF of your bill.",
+        [{ text: "OK", style: "default" }]
+      );
     }
   };
 
@@ -242,7 +245,7 @@ const BillPayment = () => {
     credits,
     Math.ceil(billData.currentBill / 100)
   );
-  const amountToPay = creditsToUse * 100;
+  const amountToPay = creditsToUse * 23.38;
   const remainingAmount = billData.currentBill - amountToPay;
   const remainingCredits = credits - creditsToUse;
 
@@ -258,11 +261,45 @@ const BillPayment = () => {
     }
   }, [creditsToUse]);
 
-  const handlePayNow = async () => {
+  const handleConfirmPayment = async () => {
+    try {
+      // Prepare bill data
+      const billData = {
+        accountNumber: params.accountNumber || ocrResult.accountNo || 'N/A',
+        userEmail: user?.email || 'N/A',
+        accountNickname: params.accountNickname || 'N/A',
+        serviceAddress: params.serviceAddress || 'N/A',
+        provider: params.provider || 'N/A',
+        currentBill: parseFloat(currentBillInput) || 0,
+        creditsUsed: creditsToUse,
+        creditAmount: amountToPay,
+        remainingAmount: remainingAmount,
+        unitsUsed: ocrResult.meterReading?.split(' ')[0] || 'N/A',
+        paymentDate: serverTimestamp(),
+        status: 'completed',
+        userId: user?.uid || 'anonymous',
+        timestamp: new Date().toISOString()
+      };
+
+      // Add a new document with a generated id
+      const docRef = await addDoc(collection(db, 'billPayments'), billData);
+      console.log('Document written with ID: ', docRef.id);
+      
+      // Show success message
+      setShowPaymentConfirmation(false);
+      setShowSuccessModal(true);
+    } catch (error) {
+      console.error('Error adding document: ', error);
+      Alert.alert('Error', 'Failed to process payment. Please try again.');
+    }
+  };
+
+  const handlePayNow = () => {
     if (creditsToUse === 0) {
       setShowCreditError(true);
       return;
     }
+    // Show payment confirmation dialog
     setShowPaymentConfirmation(true);
   };
 
@@ -297,31 +334,52 @@ const BillPayment = () => {
               Bill Summary
             </Text>
             <View className="flex-row items-center">
-              <TouchableOpacity onPress={handlePickDocument} className="bg-[#00ff88] px-4 py-2 rounded-full mr-2">
-                <Text className="text-black font-semibold text-sm">Upload</Text>
+              <TouchableOpacity 
+                onPress={handlePickDocument} 
+                className="bg-[#2a4a3a] px-2 py-2 rounded-xl flex-row items-center mr-2 border border-[#00ff88]/30"
+              >
+                <Ionicons name="document-attach" size={18} color="#00ff88" />
+                <Text className="text-[#00ff88] font-medium text-sm ml-2">Upload Bill</Text>
               </TouchableOpacity>
-              <TouchableOpacity onPress={handleOpenCamera} className="bg-[#00ff88] px-4 py-2 rounded-full">
-                <Text className="text-black font-semibold text-sm">Camera</Text>
+              <TouchableOpacity 
+                onPress={handleOpenCamera} 
+                className="bg-[#00ff88] px-2 py-2 rounded-xl flex-row items-center"
+              >
+                <Ionicons name="camera" size={18} color="#000" />
+                <Text className="text-black font-semibold text-sm ml-2">Scan Bill</Text>
               </TouchableOpacity>
             </View>
           </View>
+          </View>
           {isOcrLoading && (
-            <View className="flex-row items-center mb-2">
-              <ActivityIndicator color="#00ff88" size="small" />
-              <Text className="text-gray-300 ml-2">Reading bill…</Text>
+            <View className="mb-2 px-5">
+              <View className="flex-row items-center py-2 px-4 bg-[#122119] rounded-lg w-auto self-start">
+                <ActivityIndicator color="#00ff88" size="small" />
+                <Text className="text-gray-300 ml-2">Reading bill…</Text>
+              </View>
             </View>
           )}
 
-          <View className="bg-[#3a5a4a] rounded-2xl p-5 relative overflow-hidden">
-            {/* Watermark */}
-            <View className="absolute right-0 top-0 opacity-10">
-              <Text className="text-[#00ff88] text-6xl font-bold">CEB</Text>
-            </View>
+          <View className="rounded-2xl overflow-hidden mx-5">
+            {/* Background Image with Overlay */}
+            <ImageBackground 
+              source={require('@/assets/images/light_bill.jpg')} 
+              className="w-full h-full absolute top-0 left-0"
+              resizeMode="cover"
+            >
+              <View className="w-full h-full bg-black/50" />
+            </ImageBackground>
+            
+            <View className="p-5 relative">
+              {/* Watermark */}
+              <View className="absolute right-0 top-0 opacity-10">
+                <Text className="text-[#00ff88] text-6xl font-bold">CEB</Text>
+              </View>
 
-            <View className="flex-row justify-between items-start mb-4">
-              <View className=" flex-1 mr-4">
-                <Text className="text-white text-sm mb-1">Current Bill</Text>
-                <View className="bg-[#2a3a3a] rounded-xl px-5 py-1 flex-row items-center">
+              <View className="flex-row justify-between items-start mb-4">
+              <View className="flex-1">
+                <Text className="text-white font-medium text-sm mb-1">Current Bill</Text>
+                <View className="bg-[#2a3a3a] opacity-90 rounded-xl px-5  flex-row items-center">
                   <Text className="text-white text-base mr-2">Rs.</Text>
                   <TextInput
                     className="text-white text-base flex-1"
@@ -340,15 +398,31 @@ const BillPayment = () => {
                   />
                 </View>
               </View>
-              <View className="items-end">
-                <Text className="text-gray-300 text-xs mb-1">Due on</Text>
-                <Text className="text-white font-semibold">
-                  {billData.dueDate}
-                </Text>
-              </View>
             </View>
 
-            <View className="mb-4">
+            {ocrResult.accountNo && (
+              <View className="mb-4 opacity-80 ">
+                <Text className="text-white font-medium text-sm mb-1">Account Number</Text>
+                <View className="bg-[#2a3a3a]  rounded-xl px-5 py-3">
+                  <Text className="text-white text-base">{ocrResult.accountNo}</Text>
+                </View>
+              </View>
+            )}
+
+            {ocrResult.meterReading && (
+              <View className="mb-4 opacity-80">
+                <Text className="text-white font-medium text-sm mb-1">Units Used</Text>
+                <View className="bg-[#2a3a3a] rounded-xl px-5 py-3">
+                  <Text className="text-white text-base">
+                    {ocrResult.meterReading.includes('→') 
+                      ? `${ocrResult.meterReading.split('(')[0].trim()} units`
+                      : `${ocrResult.meterReading} units`}
+                  </Text>
+                </View>
+              </View>
+            )}
+
+            <View>
               <Text className="text-white text-sm mb-1">Credit Available</Text>
               <Text className="text-[#00ff88] text-xl font-bold">
                 Rs.{credits * creditAmount}
@@ -492,9 +566,6 @@ const BillPayment = () => {
                 <Text className="text-white text-xl font-bold">
                   Rs.{remainingAmount.toFixed(2)}
                 </Text>
-                <Text className="text-gray-400 text-xs mt-1">
-                  After Credits
-                </Text>
               </View>
             </View>
 
@@ -518,15 +589,39 @@ const BillPayment = () => {
                 </View>
               )
             )}
-          </View>
 
-          {/* Pay Button */}
-          <TouchableOpacity
-            className={`mt-6 rounded-2xl py-4 ${
-              isLoading ? "bg-[#2a4444]" : "bg-[#00ff88]"
+            {/* Summary Info */}
+            <View className="mt-4 bg-[#1a2a2a] rounded-xl p-4">
+              <View className="flex-row justify-between mb-2">
+                <Text className="text-gray-400 text-sm">Current Credits</Text>
+                <Text className="text-white font-semibold">{credits}</Text>
+              </View>
+              <View className="flex-row justify-between mb-2">
+                <Text className="text-gray-400 text-sm">Credits Used</Text>
+                <Text className="text-[#ff6666] font-semibold">
+                  -{creditsToUse}
+                </Text>
+              </View>
+              <View className="flex-row justify-between pt-2 border-t border-[#2a3a3a]">
+                <Text className="text-white font-semibold">
+                  Remaining Credits
+                </Text>
+                <Text className="text-[#00ff88] font-bold">
+                  {remainingCredits}
+                </Text>
+              </View>
+            </View>
+          </View>
+        </View>
+      </ScrollView>
+
+      {/* Pay Button */}
+            <TouchableOpacity
+            className={`mt-5 mb-5 mx-12 rounded-3xl py-4 ${
+              isLoading ? "bg-[#00ff88a1]" : !currentBillInput || parseFloat(currentBillInput) <= 0 ? "bg-[#00ff8899]" : "bg-[#00ff88]"
             }`}
             onPress={handlePayNow}
-            disabled={isLoading}
+            disabled={isLoading || !currentBillInput || parseFloat(currentBillInput) <= 0}
           >
             {isLoading ? (
               <ActivityIndicator color="#fff" />
@@ -536,30 +631,6 @@ const BillPayment = () => {
               </Text>
             )}
           </TouchableOpacity>
-
-          {/* Summary Info */}
-          <View className="mt-4 bg-[#1a2a2a] rounded-xl p-4">
-            <View className="flex-row justify-between mb-2">
-              <Text className="text-gray-400 text-sm">Current Credits</Text>
-              <Text className="text-white font-semibold">{credits}</Text>
-            </View>
-            <View className="flex-row justify-between mb-2">
-              <Text className="text-gray-400 text-sm">Credits Used</Text>
-              <Text className="text-[#ff6666] font-semibold">
-                -{creditsToUse}
-              </Text>
-            </View>
-            <View className="flex-row justify-between pt-2 border-t border-[#2a3a3a]">
-              <Text className="text-white font-semibold">
-                Remaining Credits
-              </Text>
-              <Text className="text-[#00ff88] font-bold">
-                {remainingCredits}
-              </Text>
-            </View>
-          </View>
-        </View>
-      </ScrollView>
 
       {/* Payment Confirmation Modal */}
       <Modal
@@ -616,10 +687,15 @@ const BillPayment = () => {
               </TouchableOpacity>
 
               <TouchableOpacity
-                className="flex-1 bg-[#00ff88] rounded-xl py-3 items-center"
-                onPress={confirmPayment}
+                className="flex-1 bg-[#00ff88] rounded-xl py-3 items-center justify-center"
+                onPress={handleConfirmPayment}
+                disabled={isLoading}
               >
-                <Text className="text-black font-semibold">Confirm</Text>
+                {isLoading ? (
+                  <ActivityIndicator color="#000" />
+                ) : (
+                  <Text className="text-black font-semibold">Confirm</Text>
+                )}
               </TouchableOpacity>
             </View>
           </View>
@@ -660,9 +736,9 @@ const BillPayment = () => {
                   </Text>
                 </View>
                 <View className="flex-row justify-between">
-                  <Text className="text-gray-400">Date</Text>
-                  <Text className="text-white">
-                    {new Date().toLocaleDateString()}
+                  <Text className="text-gray-400">Remaining to Pay</Text>
+                  <Text className="text-white font-semibold">
+                    Rs.{remainingAmount.toFixed(2)}
                   </Text>
                 </View>
               </View>
@@ -821,6 +897,185 @@ const BillPayment = () => {
               >
                 <Text className="text-black font-semibold">Got It!</Text>
               </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
+
+      {/* OCR Result Modal */}
+      <Modal
+        visible={showOcrResult}
+        transparent={true}
+        animationType="fade"
+        statusBarTranslucent
+        onRequestClose={() => setShowOcrResult(false)}
+      >
+        <View className="flex-1 bg-[#122119] opacity-90 justify-center items-center p-5">
+          <View className="bg-[#1a3333] rounded-2xl p-6 w-full max-w-sm">
+            {/* Header */}
+            <View className="items-center mb-4">
+              <View className="bg-[#00ff88] rounded-full p-3 mb-3">
+                <Ionicons 
+                  name={ocrResult.amount !== undefined ? "checkmark-circle" : "alert-circle"} 
+                  size={32} 
+                  color="#000" 
+                />
+              </View>
+              <Text className="text-white text-xl font-bold text-center">
+                {ocrResult.amount !== undefined ? "Bill Scan Complete" : "Scan Failed"}
+              </Text>
+            </View>
+
+            {/* Content */}
+            <View className="mb-6">
+              {ocrResult.amount !== undefined ? (
+                <View className="space-y-3">
+                  <Text className="text-gray-300 text-center mb-3">
+                    We've extracted the following details from your bill:
+                  </Text>
+                  
+                  <View className="bg-[#2a3a3a] rounded-xl p-3">
+                    <View className="space-y-2">
+                      <View className="flex-row items-center">
+                        <Ionicons 
+                          name={ocrResult.accountNo ? "card" : "close-circle"} 
+                          size={20} 
+                          color={ocrResult.accountNo ? "#00ff88" : "#ff4d4d"} 
+                          style={{marginRight: 8}}
+                        />
+                        <Text className="text-white font-medium">
+                          {ocrResult.accountNo ? "Account Number:" : "Account not found"}
+                        </Text>
+                      </View>
+                      {ocrResult.accountNo && (
+                        <View className="ml-8">
+                          <Text className="text-white">
+                            {ocrResult.accountNo}
+                          </Text>
+                        </View>
+                      )}
+                    </View>
+                    
+                    <View className="space-y-2">
+                      <View className="flex-row items-center">
+                        <Ionicons 
+                          name={ocrResult.amount ? "cash" : "close-circle"} 
+                          size={20} 
+                          color={ocrResult.amount ? "#00ff88" : "#ff4d4d"} 
+                          style={{marginRight: 8}}
+                        />
+                        <Text className="text-white font-medium">
+                          {ocrResult.amount ? "Bill Amount:" : "Amount not found"}
+                        </Text>
+                      </View>
+                      {ocrResult.amount && (
+                        <View className="ml-8">
+                          <Text className="text-white">
+                            Rs.{ocrResult.amount.toFixed(2)}
+                          </Text>
+                        </View>
+                      )}
+                    </View>
+                    
+                    <View className="space-y-2">
+                      <View className="flex-row items-center">
+                        <Ionicons 
+                          name={ocrResult.meterReading ? "speedometer" : "close-circle"} 
+                          size={20} 
+                          color={ocrResult.meterReading ? "#00ff88" : "#ff4d4d"} 
+                          style={{marginRight: 8}}
+                        />
+                        <Text className="text-white font-medium">
+                          {ocrResult.meterReading ? "Meter Usage (Units):" : "Meter reading not found"}
+                        </Text>
+                      </View>
+                      {ocrResult.meterReading && (
+                        <View className="ml-8">
+                          {ocrResult.meterReading.includes('→') ? (
+                            <View>
+                              <Text className="text-white">
+                                {ocrResult.meterReading.split('(')[0].trim()} units
+                              </Text>
+                              <Text className="text-gray-400 text-sm">
+                                {ocrResult.meterReading.match(/\(([^)]+)\)/)?.[1] || ''}
+                              </Text>
+                            </View>
+                          ) : (
+                            <Text className="text-white">
+                              {ocrResult.meterReading} units (current reading)
+                            </Text>
+                          )}
+                        </View>
+                      )}
+                    </View>
+                  </View>
+                  
+                  <Text className="text-gray-400 text-sm text-center mt-3">
+                    Please verify the details before proceeding.
+                  </Text>
+                </View>
+              ) : (
+                <View className="space-y-4">
+                  <Text className="text-gray-300 text-center">
+                    We couldn't read your bill. Please ensure:
+                  </Text>
+                  <View className="bg-[#2a3a3a] rounded-xl p-3">
+                    <View className="flex-row items-center mb-2">
+                      <Ionicons name="checkmark-circle" size={16} color="#00ff88" style={{marginRight: 8}} />
+                      <Text className="text-gray-300">The bill is well-lit and in focus</Text>
+                    </View>
+                    <View className="flex-row items-center mb-2">
+                      <Ionicons name="checkmark-circle" size={16} color="#00ff88" style={{marginRight: 8}} />
+                      <Text className="text-gray-300">All text is clear and visible</Text>
+                    </View>
+                    <View className="flex-row items-center">
+                      <Ionicons name="checkmark-circle" size={16} color="#00ff88" style={{marginRight: 8}} />
+                      <Text className="text-gray-300">The image isn't blurry</Text>
+                    </View>
+                  </View>
+                </View>
+              )}
+            </View>
+
+            {/* Footer */}
+            <View className="flex-row space-x-3">
+              {ocrResult.amount !== undefined ? (
+                <>
+                  <TouchableOpacity 
+                    className="flex-1 bg-[#2a3a3a] py-3 rounded-xl items-center"
+                    onPress={() => setShowOcrResult(false)}
+                  >
+                    <Text className="text-white font-semibold">Looks Good</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity 
+                    className="flex-1 bg-[#00ff88] py-3 rounded-xl items-center"
+                    onPress={() => {
+                      setShowOcrResult(false);
+                      handleOpenCamera();
+                    }}
+                  >
+                    <Text className="text-black font-semibold">Rescan</Text>
+                  </TouchableOpacity>
+                </>
+              ) : (
+                <>
+                  <TouchableOpacity 
+                    className="flex-1 bg-[#2a3a3a] py-3 rounded-xl items-center"
+                    onPress={() => setShowOcrResult(false)}
+                  >
+                    <Text className="text-white font-semibold">Enter Manually</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity 
+                    className="flex-1 bg-[#00ff88] py-3 rounded-xl items-center"
+                    onPress={() => {
+                      setShowOcrResult(false);
+                      handleOpenCamera();
+                    }}
+                  >
+                    <Text className="text-black font-semibold">Try Again</Text>
+                  </TouchableOpacity>
+                </>
+              )}
             </View>
           </View>
         </View>
