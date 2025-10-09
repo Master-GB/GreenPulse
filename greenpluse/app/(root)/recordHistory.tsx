@@ -10,7 +10,7 @@ import {
 import React, { useState, useEffect } from "react";
 import { ArrowLeft, Edit, Trash2, Info } from "lucide-react-native";
 import { useRouter } from "expo-router";
-import { collection, query, where, getDocs, deleteDoc, doc } from 'firebase/firestore';
+import { collection, getDocs, deleteDoc, doc } from 'firebase/firestore';
 import { db } from '../../config/firebaseConfig';
 import { useAuth } from '../../contexts/AuthContext';
 
@@ -45,21 +45,21 @@ const RecordHistory = () => {
       }
 
       try {
-        const recordsRef = collection(db, 'energyRecords');
-        const q = query(recordsRef, where('userId', '==', user.uid));
-        const querySnapshot = await getDocs(q);
+  const recordsRef = collection(db, 'users', user.uid, 'energyRecords');
+  const querySnapshot = await getDocs(recordsRef);
         
         const fetchedRecords: EnergyRecord[] = [];
         querySnapshot.forEach((doc) => {
           const data = doc.data();
+          const timestampValue = data.timestamp?.toDate ? data.timestamp.toDate() : new Date();
           fetchedRecords.push({
             id: doc.id,
             userId: data.userId,
             kwhValue: data.kwhValue,
             period: data.period,
-            recordedAtString: data.recordedAtString,
+            recordedAtString: data.recordedAtString ?? data.recordedAt?.toDate?.().toLocaleString?.() ?? "",
             device: data.device,
-            timestamp: data.timestamp.toDate(),
+            timestamp: timestampValue,
           });
         });
 
@@ -90,8 +90,13 @@ const RecordHistory = () => {
           text: "Delete",
           style: "destructive",
           onPress: async () => {
+            if (!user) {
+              Alert.alert("Error", "You must be logged in to delete records.");
+              return;
+            }
+
             try {
-              await deleteDoc(doc(db, 'energyRecords', id));
+              await deleteDoc(doc(db, 'users', user.uid, 'energyRecords', id));
               setRecords(records.filter((record) => record.id !== id));
               Alert.alert("Success", "Record deleted successfully");
             } catch (error) {

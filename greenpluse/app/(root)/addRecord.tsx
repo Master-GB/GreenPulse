@@ -8,24 +8,29 @@ import {
   SafeAreaView,
   StatusBar,
   Alert,
+  Modal, // <-- Import Modal for the notes popup
+  Platform, // <-- Import Platform to handle OS-specific UI
 } from "react-native";
 import React, { useState } from "react";
 import { Camera, Calendar, Edit3, Paperclip } from "lucide-react-native";
 import { useRouter } from "expo-router";
 import logoicon from "../../assets/images/GreenPluseLogo.png";
 import camImage from "../../assets/images/camerascanner2.png";
+import DateTimePicker from "@react-native-community/datetimepicker"; // <-- Import the date picker
 
 // --- Firebase Imports ---
-// We now import `firestore` directly from your firebase.ts file
-import { db } from '../../config/firebaseConfig';
-import { collection, addDoc } from 'firebase/firestore'; // Still need these functions
-import { useAuth } from '../../contexts/AuthContext';
+import { db } from "../../config/firebaseConfig";
+import { collection, addDoc, serverTimestamp } from "firebase/firestore";
+import { useAuth } from "../../contexts/AuthContext";
 // ------------------------
 
 // Hide the default navigator header for this route
 export const options = {
   headerShown: false,
 };
+
+// --- CONVERSION CONSTANT ---
+const KWH_PER_COIN = 1;
 
 const AddRecord = () => {
   const router = useRouter();
@@ -34,8 +39,15 @@ const AddRecord = () => {
     "Weekly" | "Monthly" | "Yearly"
   >("Monthly");
   const [kwhValue, setKwhValue] = useState("");
-  const [dateTime, setDateTime] = useState("11/03/25 11:31AM"); // This is a static string, consider using a Date object or proper date picker output
   const [device, setDevice] = useState("");
+
+  // --- New state for notes and date picker ---
+  const [note, setNote] = useState("");
+  const [tempNote, setTempNote] = useState(""); // Temporary state for modal input
+  const [isNotesModalVisible, setNotesModalVisible] = useState(false);
+  const [dateTime, setDateTime] = useState(new Date()); // Use Date object
+  const [showDatePicker, setShowDatePicker] = useState(false);
+  // ------------------------------------------
 
   const handleSaveRecord = async () => {
     if (!user) {
@@ -43,12 +55,7 @@ const AddRecord = () => {
       return;
     }
 
-    if (!kwhValue.trim()) {
-      Alert.alert("Error", "Please enter a kWh value.");
-      return;
-    }
-
-    if (isNaN(parseFloat(kwhValue))) { // Added check for valid number
+    if (!kwhValue.trim() || isNaN(parseFloat(kwhValue))) {
       Alert.alert("Error", "Please enter a valid number for kWh value.");
       return;
     }
@@ -59,17 +66,27 @@ const AddRecord = () => {
     }
 
     try {
-      // Use the imported 'firestore' instance directly
-      const recordsCollection = collection(db, 'energyRecords'); // Reference to your 'energyRecords' collection
+      const numericKwhValue = parseFloat(kwhValue);
+      const calculatedCoinValue = numericKwhValue / KWH_PER_COIN;
+      
+      const recordsCollection = collection(
+        db,
+        "users",
+        user.uid,
+        "energyRecords"
+      );
+      const recordedAtString = dateTime.toLocaleString();
 
-      // Add a new document to the 'energyRecords' collection
       const docRef = await addDoc(recordsCollection, {
-        userId: user.uid, // Add user ID for data isolation
-        kwhValue: parseFloat(kwhValue), // Convert kWh value to a number
+        userId: user.uid,
+        kwhValue: numericKwhValue,
+        coinValue: calculatedCoinValue,
         period: selectedPeriod,
-        recordedAtString: dateTime, // Storing as a string for now; consider a proper Date object
+        note: note, // <-- ADDED: Save the note
+        recordedAt: dateTime, // <-- CHANGED: Save the actual Date object
+        recordedAtString,
         device: device,
-        timestamp: new Date(), // Firestore automatically handles Date objects
+        timestamp: serverTimestamp(), // This is the creation timestamp
       });
 
       console.log("Document written with ID: ", docRef.id);
@@ -78,56 +95,73 @@ const AddRecord = () => {
         {
           text: "OK",
           onPress: () => {
-            // Optional: Clear form fields after successful save
-            setKwhValue('');
-            setDevice('');
-            // navigate to the Record History screen
+            // Clear all form fields
+            setKwhValue("");
+            setDevice("");
+            setNote("");
+            setDateTime(new Date());
             router.push("/(root)/recordHistory");
           },
         },
       ]);
     } catch (e: unknown) {
-      // Safely extract a message from unknown error types
       const errMsg = e instanceof Error ? e.message : String(e);
       console.error("Error adding document: ", e);
       Alert.alert("Error", "Failed to save record: " + errMsg);
     }
   };
 
+  // --- Handlers for Notes Modal ---
+  const handleOpenNotes = () => {
+    setTempNote(note); // Load current note into modal
+    setNotesModalVisible(true);
+  };
+
+  const handleSaveNote = () => {
+    setNote(tempNote); // Save note from modal
+    setNotesModalVisible(false);
+  };
+
+  const handleCloseNotesModal = () => {
+    setNotesModalVisible(false);
+  };
+  // ---------------------------------
+
+  // --- Handlers for Date Picker ---
+  const handleDateChange = (event: any, selectedDate?: Date) => {
+    setShowDatePicker(Platform.OS === "ios"); // iOS requires manual dismissal
+    if (selectedDate) {
+      setDateTime(selectedDate);
+    }
+  };
+
+  const showDateTimePicker = () => {
+    setShowDatePicker(true);
+  };
+  // -------------------------------
+
   const handleUseScanner = () => {
-    // TODO: Implement OCR Scanner logic here
     Alert.alert("Scanner", "OCR Scanner will be implemented");
   };
 
-  const handleDateTimePicker = () => {
-    // TODO: Implement date/time picker
-    Alert.alert("Date & Time", "Date picker will be implemented");
-  };
-
-  const handleNotes = () => {
-    // TODO: Implement notes functionality
-    Alert.alert("Notes", "Notes functionality will be implemented");
-  };
-
   const handleAttachImage = () => {
-    // TODO: Implement image picker
     Alert.alert("Attach Image", "Image picker will be implemented");
   };
+
+  const hasNote = note.trim().length > 0;
 
   return (
     <SafeAreaView className="flex-1 bg-[#0a1410]">
       <StatusBar barStyle="light-content" backgroundColor="#0a1410" />
       <ScrollView className="flex-1 px-5 pt-8">
-        {/* Logo and text */}
+        {/* ... (Logo and OCR Scanner Card remain the same) ... */}
         <View className="flex-row items-center justify-center">
-          <Text className="text-white text-3xl font-bold mb-8">GreenPulse</Text>
-          <Image source={logoicon} className="w-32 h-32 mb-4" />
+            <Text className="text-white text-3xl font-bold mb-8">GreenPulse</Text>
+            <Image source={logoicon} className="w-32 h-32 mb-4" />
         </View>
 
-        {/* OCR Scanner Card */}
         <View className="bg-[#1a3830] rounded-3xl p-6 mb-6">
           <View className="flex-row items-end">
-            {/* Text and button */}
             <View>
               <Text className="text-white text-2xl font-bold mb-4 leading-tight">
                 Try our{"\n"}advanced OCR{"\n"}Scanner!
@@ -142,8 +176,6 @@ const AddRecord = () => {
                 </Text>
               </TouchableOpacity>
             </View>
-
-            {/* Scanner Image */}
             <View className="flex justify-center items-center h-50">
               <Image source={camImage} className="w-40 h-10 ml-6 mb-10" />
             </View>
@@ -194,13 +226,26 @@ const AddRecord = () => {
             Date & Time
           </Text>
           <TouchableOpacity
-            onPress={handleDateTimePicker}
+            onPress={showDateTimePicker}
             className="bg-[#0a1410] border-2 border-[#0fd56b] rounded-3xl px-5 py-4 flex-row items-center justify-between"
           >
-            <Text className="text-white text-base">{dateTime}</Text>
+            <Text className="text-white text-base">
+              {dateTime.toLocaleString()}
+            </Text>
             <Calendar size={20} color="#0fd56b" strokeWidth={2} />
           </TouchableOpacity>
         </View>
+
+        {/* This is the actual Date Picker component, it's hidden until you press the button */}
+        {showDatePicker && (
+          <DateTimePicker
+            value={dateTime}
+            mode="datetime"
+            is24Hour={false}
+            display="default"
+            onChange={handleDateChange}
+          />
+        )}
 
         {/* Device Field */}
         <View className="mb-6">
@@ -219,11 +264,23 @@ const AddRecord = () => {
         {/* Action Buttons */}
         <View className="flex-row gap-4 mb-8">
           <TouchableOpacity
-            onPress={handleNotes}
-            className="flex-1 bg-transparent border-2 border-[#0fd56b] rounded-3xl px-5 py-4 flex-row items-center justify-center"
+            onPress={handleOpenNotes}
+            className={`flex-1 rounded-3xl px-5 py-4 flex-row items-center justify-center ${
+              hasNote
+                ? "bg-[#0fd56b]"
+                : "bg-transparent border-2 border-[#0fd56b]"
+            }`}
           >
-            <Edit3 size={20} color="#0fd56b" strokeWidth={2} />
-            <Text className="text-white font-semibold text-base ml-2">
+            <Edit3
+              size={20}
+              color={hasNote ? "#000" : "#0fd56b"}
+              strokeWidth={2}
+            />
+            <Text
+              className={`font-semibold text-base ml-2 ${
+                hasNote ? "text-black" : "text-white"
+              }`}
+            >
               Notes
             </Text>
           </TouchableOpacity>
@@ -247,6 +304,46 @@ const AddRecord = () => {
           <Text className="text-black font-bold text-lg">Save Record</Text>
         </TouchableOpacity>
       </ScrollView>
+
+      {/* --- Notes Modal --- */}
+      <Modal
+        visible={isNotesModalVisible}
+        transparent={true}
+        animationType="fade"
+        onRequestClose={handleCloseNotesModal}
+      >
+        <View className="flex-1 justify-center items-center bg-black/70 px-5">
+          <View className="w-full bg-[#1a3830] rounded-2xl p-6 border border-[#0fd56b]">
+            <Text className="text-white text-xl font-bold mb-4">
+              Add a Note
+            </Text>
+            <TextInput
+              value={tempNote}
+              onChangeText={setTempNote}
+              placeholder="Enter your notes here..."
+              placeholderTextColor="#4a5a54"
+              multiline
+              numberOfLines={4}
+              textAlignVertical="top"
+              className="bg-[#0a1410] border border-[#0fd56b] rounded-xl p-4 text-white text-base h-32 mb-6"
+            />
+            <View className="flex-row gap-4">
+              <TouchableOpacity
+                onPress={handleCloseNotesModal}
+                className="flex-1 bg-transparent border border-[#0fd56b] rounded-full py-3 items-center"
+              >
+                <Text className="text-white font-bold">Cancel</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                onPress={handleSaveNote}
+                className="flex-1 bg-[#0fd56b] rounded-full py-3 items-center"
+              >
+                <Text className="text-black font-bold">Save Note</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
     </SafeAreaView>
   );
 };
