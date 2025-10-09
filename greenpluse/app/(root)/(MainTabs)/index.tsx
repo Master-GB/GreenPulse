@@ -1,7 +1,10 @@
 import React from 'react';
 import { View, Text, ScrollView, TouchableOpacity, Image, FlatList, StatusBar, ImageBackground } from 'react-native';
-import { useRouter } from 'expo-router';
+import { useRouter, useFocusEffect } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { collection, getDocs, query, orderBy, limit, writeBatch, doc, DocumentData } from 'firebase/firestore';
+import { db } from '../../../config/firebaseConfig';
+import { useAuth } from '../../../contexts/AuthContext';
 import {
   Home as HomeIcon,
   Zap,
@@ -16,6 +19,133 @@ import { icons } from '@/constants/icons';
 
 export default function Home() {
   const router = useRouter();
+  const { user } = useAuth();
+  const [communityTotal, setCommunityTotal] = React.useState(0);
+  type Story = {
+    id: string;
+    title: string;
+    excerpt: string;
+    image: string;
+    createdAt: Date;
+  };
+
+  const [communityStories, setCommunityStories] = React.useState<Story[]>([]);
+
+  const loadCommunityTotal = React.useCallback(async () => {
+    try {
+      if (!user) return;
+      
+      // Get all donations for community total
+      const allDonationsRef = collection(db, 'donations');
+      const allSnap = await getDocs(allDonationsRef);
+      
+      let communityTotal = 0;
+      const currentMonth = new Date().getMonth();
+      const currentYear = new Date().getFullYear();
+      
+      allSnap.forEach((doc) => {
+        const data: any = doc.data();
+        const amount = typeof data?.amountCoins === 'number' ? data.amountCoins : 0;
+        
+        let created: Date | null = null;
+        if (data?.createdAt?.toDate) {
+          created = data.createdAt.toDate();
+        } else if (data?.createdAt instanceof Date) {
+          created = data.createdAt;
+        }
+        if (!created || created.getMonth() !== currentMonth || created.getFullYear() !== currentYear) return;
+        
+        communityTotal += amount;
+      });
+      
+      setCommunityTotal(communityTotal);
+    } catch (e) {
+      console.log('Error loading community total:', e);
+    }
+  }, [user]);
+
+  // Function to add sample stories to Firestore (run once)
+  const addSampleStories = async () => {
+    try {
+      const stories = [
+        {
+          title: 'Powering Safe Nights',
+          excerpt: 'You & 200 others powered safe nights for 80 families',
+          body: 'Through your contributions, we installed solar lanterns and micro-grids that now power safe nights for 80 families. Children can study, and parents can work in the evenings without relying on unsafe kerosene lamps.',
+          image: 'https://images.unsplash.com/photo-1488521787991-ed7bbaae773c?w=400',
+          createdAt: new Date('2025-10-01')
+        },
+        {
+          title: 'Solar Lights Transform Village Life',
+          excerpt: '200 families now have access to clean, reliable lighting after our solar panel installation project.',
+          body: 'Thanks to your generous donations, we\'ve installed solar panels in a remote village, bringing light to 200 families. Children can now study after dark, and small businesses can operate longer hours, significantly improving the community\'s quality of life.',
+          image: 'https://images.unsplash.com/photo-1509391366360-2e959784a276?w=800',
+          createdAt: new Date('2025-09-15')
+        },
+        {
+          title: 'Lighting Classrooms',
+          excerpt: 'Together, the community lit up 3 classrooms in rural schools.',
+          body: 'A collaborative effort brought clean electricity to 3 classrooms, enabling evening classes and computer literacy programs for students in rural areas.',
+          image: 'https://images.unsplash.com/photo-1497633762265-9d179a990aa6?w=400',
+          createdAt: new Date('2025-09-01')
+        }
+      ];
+
+      const batch = writeBatch(db);
+      const storiesRef = collection(db, 'communityStory');
+      
+      // Add each story to the batch
+      stories.forEach(story => {
+        const docRef = doc(storiesRef);
+        batch.set(docRef, story);
+      });
+      
+      // Commit the batch
+      await batch.commit();
+      console.log('Successfully added sample stories');
+      
+      // Reload the stories
+      loadCommunityStories();
+    } catch (error) {
+      console.error('Error adding sample stories:', error);
+    }
+  };
+
+  const loadCommunityStories = React.useCallback(async () => {
+    try {
+      console.log('Fetching community stories...');
+      const storiesRef = collection(db, 'communityStory');
+      const querySnapshot = await getDocs(storiesRef);
+      
+      const stories = querySnapshot.docs
+        .map(doc => {
+          const data = doc.data();
+          return {
+            id: doc.id,
+            title: data.title || 'No Title',
+            excerpt: data.excerpt || '',
+            body: data.body || '',
+            image: data.image || 'https://images.unsplash.com/photo-1488521787991-ed7bbaae773c?w=400',
+            createdAt: data.createdAt?.toDate ? data.createdAt.toDate() : new Date()
+          };
+        })
+        .sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime())
+        .slice(0, 3); // Show only the first 3 stories
+      
+      console.log('Fetched stories:', stories);
+      setCommunityStories(stories);
+    } catch (error) {
+      console.error('Error loading community stories:', error);
+    }
+  }, []);
+
+  // Load community total and stories on initial mount and when screen comes into focus
+  useFocusEffect(
+    React.useCallback(() => {
+      loadCommunityTotal();
+      loadCommunityStories();
+    }, [loadCommunityTotal, loadCommunityStories])
+  );
   return (
     <SafeAreaView className="flex-1 bg-[#122119]">
       <StatusBar barStyle="light-content" />
@@ -68,10 +198,10 @@ export default function Home() {
                 style={{
                   borderBottomColor: 'transparent',
                   borderLeftColor: 'transparent',
-                  transform: [{ rotate: '-60deg' }],
+                  transform: [{ rotate: `${(communityTotal / 5000) * 360 - 90}deg` }],
                 }}
               />
-              <Text className="text-white text-2xl font-bold">60%</Text>
+              <Text className="text-white text-2xl font-bold">{Math.min(100, Math.round((communityTotal / 5000) * 100))}%</Text>
             </View>
 
             {/* Pool Info - Moved to right */}
@@ -80,7 +210,7 @@ export default function Home() {
                 Community Energy Pool
               </Text>
               <Text className="text-gray-300 text-sm mb-3">
-                3,450 / 5,000 kWh contributed
+                {communityTotal.toLocaleString()} / 5,000 kWh contributed
               </Text>
               <TouchableOpacity 
                 className="bg-[#1AE57D] rounded-full py-3 w-full max-w-[190px]"
@@ -148,85 +278,45 @@ export default function Home() {
         </View>
 
         {/* Impact Stories */}
-        <View className="mx-4 mb-[60px]">
+        <View className="mx-4 mb-[80px]">
           <View className="flex-row justify-between items-center mb-4">
             <Text className="text-white text-xl font-bold">Impact Stories</Text>
             <TouchableOpacity onPress={() => router.push('/(root)/impact')}>
               <Text className="text-emerald-500 font-semibold">View Impact</Text>
             </TouchableOpacity>
           </View>
-
-          {/* Story Card 1 */}
-          <TouchableOpacity 
-            className="bg-[#2a3e3e] rounded-3xl overflow-hidden mb-4"
-            onPress={() => router.push({
-              pathname: "/stories/[id]",
-              params: {
-                id: "1",
-                title: "Community Power Donation",
-                image: "https://images.unsplash.com/photo-1509391366360-2e959784a276?w=800",
-                body: "Your donation powered 10 homes this month. Thanks to community contributions, families in Galle now have reliable clean energy access, enabling children to study at night and businesses to operate after dark."
-              }
-            })}
-          >
-            <Image
-              source={{ uri: 'https://images.unsplash.com/photo-1509391366360-2e959784a276?w=800' }}
-              className="w-full h-48"
-              resizeMode="cover"
-            />
-            <View className="p-5">
-              <View className="flex-row items-center gap-2 mb-3">
-                <HomeIcon size={20} color="#10b981" />
-                <Text className="text-emerald-500 font-semibold text-base">
-                  Community Power Donation
-                </Text>
-              </View>
-              <Text className="text-white font-bold text-lg mb-2">
-                Your donation powered 10 homes in this month
-              </Text>
-              <Text className="text-gray-400 text-sm leading-5">
-                Thanks to community contributions, families in Galle now have
-                reliable clean energy access.
-              </Text>
+          
+          {communityStories.length > 0 ? (
+            <View className="gap-3 mb-2">
+              {communityStories.map((story) => (
+                <TouchableOpacity 
+                  key={story.id}
+                  className="bg-[#2a3e3e] rounded-2xl overflow-hidden"
+                  onPress={() => router.push(`/(root)/stories/${story.id}?title=${encodeURIComponent(story.title)}&body=${encodeURIComponent(story.excerpt)}&image=${encodeURIComponent(story.image)}`)}
+                >
+                  <View className="flex-row">
+                    <Image 
+                      source={{ uri: story.image }} 
+                      className="w-24 h-24 rounded-l-2xl" 
+                      resizeMode="cover"
+                    />
+                    <View className="flex-1 p-3">
+                      <Text className="text-white font-semibold text-base mb-1" numberOfLines={1}>
+                        {story.title}
+                      </Text>
+                      <Text className="text-gray-300 text-xs" numberOfLines={3}>
+                        {story.excerpt}
+                      </Text>
+                    </View>
+                  </View>
+                </TouchableOpacity>
+              ))}
             </View>
-          </TouchableOpacity>
-
-          {/* Story Card 2 */}
-          <TouchableOpacity 
-            className="bg-[#2a3e3e] rounded-3xl overflow-hidden mb-6"
-            onPress={() => router.push({
-              pathname: "/stories/[id]",
-              params: {
-                id: "2",
-                title: "Kandy Solar Project",
-                image: "https://images.unsplash.com/photo-1508514177221-188b1cf16e9d?w=800",
-                body: "Our community solar project in Kandy is now fully operational, providing clean energy to 15 households. The project includes battery storage to ensure consistent power supply even during cloudy days."
-              }
-            })}
-          >
-            <Image
-              source={{ uri: 'https://images.unsplash.com/photo-1508514177221-188b1cf16e9d?w=800' }}
-              className="w-full h-48"
-              resizeMode="cover"
-            />
-            <View className="p-5">
-              <View className="flex-row items-center gap-2 mb-3">
-                <View className="bg-yellow-500 rounded-full p-1">
-                  <Text className="text-base">☀️</Text>
-                </View>
-                <Text className="text-yellow-500 font-semibold text-base">
-                  Kandy Project
-                </Text>
-              </View>
-              <Text className="text-white font-bold text-lg mb-2">
-                Community solar project installed ☀️
-              </Text>
-              <Text className="text-gray-400 text-sm leading-5">
-                New solar installation will provide clean energy to 50+
-                families in the Kandy district.
-              </Text>
+          ) : (
+            <View className="bg-[#2a3e3e] rounded-2xl p-6 items-center justify-center h-32">
+              <Text className="text-gray-400 text-center">No impact stories available yet</Text>
             </View>
-          </TouchableOpacity>
+          )}
         </View>
       </ScrollView>
     </SafeAreaView>

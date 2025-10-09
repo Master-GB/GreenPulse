@@ -1,5 +1,17 @@
 import React, { useState } from "react";
-import { View, TextInput, Button, Text } from "react-native";
+import { 
+  View, 
+  TextInput, 
+  Text, 
+  TouchableOpacity, 
+  StyleSheet, 
+  Alert, 
+  ActivityIndicator,
+  KeyboardAvoidingView,
+  Platform,
+  ScrollView
+} from "react-native";
+import { router } from "expo-router";
 import { createUserWithEmailAndPassword, updateProfile } from "firebase/auth";
 import { auth, db } from "../config/firebaseConfig";
 import { doc, setDoc } from "firebase/firestore";
@@ -17,9 +29,14 @@ export default function RegisterScreen() {
       return;
     }
     
+    if (!email || !password) {
+      setMessage("Please fill in all fields");
+      return;
+    }
+
     setIsLoading(true);
     setMessage("");
-    
+
     try {
       // 1. Create user with email and password
       const userCredential = await createUserWithEmailAndPassword(auth, email, password);
@@ -42,76 +59,159 @@ export default function RegisterScreen() {
         });
         await auth.currentUser.reload();
       }
+
+      // 4. Navigate to home screen after successful registration
+      router.replace("/(root)/(MainTabs)");
       
-      setMessage("Registration successful! You can now log in.");
     } catch (error: any) {
       console.error("Registration error:", error);
-      setMessage(error.message || "An error occurred during registration.");
-    } finally {
+      let errorMessage = "An error occurred during registration.";
+      
+      // Handle specific error cases
+      if (error.code === 'auth/email-already-in-use') {
+        errorMessage = 'This email is already in use. Please use a different email.';
+      } else if (error.code === 'auth/weak-password') {
+        errorMessage = 'Password should be at least 6 characters long.';
+      } else if (error.code === 'auth/invalid-email') {
+        errorMessage = 'Please enter a valid email address.';
+      }
+      
+      setMessage(errorMessage);
       setIsLoading(false);
     }
   };
 
   return (
-    <View style={{ padding: 20, flex: 1, justifyContent: 'center', backgroundColor: '#122119' }}>
-      <Text style={{ color: '#2ECC71', fontSize: 24, fontWeight: 'bold', marginBottom: 30, textAlign: 'center' }}>Create Account</Text>
-      
-      <TextInput
-        placeholder="Full Name"
-        placeholderTextColor="#9CA3AF"
-        value={name}
-        onChangeText={setName}
-        style={inputStyle}
-      />
-      
-      <TextInput
-        placeholder="Email"
-        placeholderTextColor="#9CA3AF"
-        value={email}
-        onChangeText={setEmail}
-        keyboardType="email-address"
-        autoCapitalize="none"
-        style={inputStyle}
-      />
-      
-      <TextInput
-        placeholder="Password"
-        placeholderTextColor="#9CA3AF"
-        secureTextEntry
-        value={password}
-        onChangeText={setPassword}
-        style={inputStyle}
-      />
-      
-      <View style={{ marginTop: 20, borderRadius: 8, overflow: 'hidden' }}>
-        <Button 
-          title={isLoading ? 'Creating Account...' : 'Sign Up'} 
-          onPress={handleRegister} 
-          disabled={isLoading}
-          color="#2ECC71"
+    <KeyboardAvoidingView 
+      behavior={Platform.OS === 'ios' ? 'padding' : 'height'} 
+      style={styles.container}
+    >
+      <ScrollView 
+        contentContainerStyle={styles.scrollContainer}
+        keyboardShouldPersistTaps="handled"
+      >
+        <Text style={styles.title}>Create Account</Text>
+        
+        <TextInput
+          style={styles.input}
+          placeholder="Full Name"
+          placeholderTextColor="#9CA3AF"
+          value={name}
+          onChangeText={setName}
         />
-      </View>
-      
-      {message ? (
-        <Text style={{ 
-          color: message.includes('success') ? '#2ECC71' : '#EF4444', 
-          marginTop: 15, 
-          textAlign: 'center' 
-        }}>
-          {message}
-        </Text>
-      ) : null}
-    </View>
+        
+        <TextInput
+          style={[styles.input, { marginTop: 15 }]}
+          placeholder="Email"
+          placeholderTextColor="#9CA3AF"
+          value={email}
+          onChangeText={setEmail}
+          keyboardType="email-address"
+          autoCapitalize="none"
+          autoComplete="email"
+        />
+        
+        <TextInput
+          style={[styles.input, { marginTop: 15, marginBottom: 20 }]}
+          placeholder="Password"
+          placeholderTextColor="#9CA3AF"
+          value={password}
+          onChangeText={setPassword}
+          secureTextEntry
+          autoComplete="new-password"
+        />
+        
+        {message ? (
+          <Text style={[
+            styles.message, 
+            { color: message.includes('successful') ? '#1AE57D' : '#EF4444' }
+          ]}>
+            {message}
+          </Text>
+        ) : null}
+        
+        <TouchableOpacity 
+          style={styles.button}
+          onPress={handleRegister}
+          disabled={isLoading}
+        >
+          {isLoading ? (
+            <ActivityIndicator color="#122119" />
+          ) : (
+            <Text style={styles.buttonText}>Sign Up</Text>
+          )}
+        </TouchableOpacity>
+        
+        <View style={styles.footer}>
+          <Text style={styles.footerText}>Already have an account? </Text>
+          <TouchableOpacity 
+            onPress={() => router.push('/signIn')}
+            disabled={isLoading}
+          >
+            <Text style={styles.footerLink}>Sign In</Text>
+          </TouchableOpacity>
+        </View>
+      </ScrollView>
+    </KeyboardAvoidingView>
   );
 }
 
-const inputStyle = {
-  backgroundColor: '#1E2E24',
-  color: '#FFFFFF',
-  padding: 15,
-  borderRadius: 8,
-  marginBottom: 15,
-  fontSize: 16,
-  borderWidth: 1,
-  borderColor: '#2A4A3A'
-};
+const styles = StyleSheet.create({
+  container: {
+    flex: 1,
+    backgroundColor: '#122119',
+  },
+  scrollContainer: {
+    flexGrow: 1,
+    padding: 20,
+    justifyContent: 'center',
+  },
+  title: {
+    color: '#1AE57D',
+    fontSize: 28,
+    fontWeight: 'bold',
+    marginBottom: 30,
+    textAlign: 'center',
+  },
+  input: {
+    backgroundColor: '#1E2E24',
+    color: '#FFFFFF',
+    padding: 15,
+    borderRadius: 10,
+    fontSize: 16,
+    borderWidth: 1,
+    borderColor: '#2A3E3E',
+    width: '100%',
+  },
+  button: {
+    backgroundColor: '#1AE57D',
+    padding: 15,
+    borderRadius: 10,
+    alignItems: 'center',
+    marginTop: 10,
+  },
+  buttonText: {
+    color: '#122119',
+    fontSize: 16,
+    fontWeight: '600',
+  },
+  message: {
+    marginBottom: 20,
+    textAlign: 'center',
+    padding: 10,
+    borderRadius: 5,
+  },
+  footer: {
+    marginTop: 20,
+    flexDirection: 'row',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  footerText: {
+    color: '#9CA3AF',
+  },
+  footerLink: {
+    color: '#1AE57D',
+    fontWeight: '600',
+  },
+});

@@ -11,17 +11,148 @@ import {
   Alert,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { useRouter } from "expo-router";
+import { useRouter, useFocusEffect } from "expo-router";
 import { Globe, Zap, Leaf, Users } from "lucide-react-native";
+import { collection, getDocs, query, where } from "firebase/firestore";
+import { db } from "../../config/firebaseConfig";
+import { useAuth } from "../../contexts/AuthContext";
 import { LineChart } from "react-native-chart-kit";
-import { images } from "@/constants/images";
 import ViewShot from "react-native-view-shot";
 import * as Sharing from "expo-sharing";
+import { images } from "@/constants/images";
 
 export default function Impact() {
   const screenWidth = Dimensions.get("window").width;
   const router = useRouter();
   const viewShotRef = useRef<ViewShot>(null);
+  const { user } = useAuth();
+  const [donatedEnergy, setDonatedEnergy] = React.useState({
+    total: 0,
+    currentMonth: 0,
+    previousMonth: 0
+  });
+  const [familiesHelped, setFamiliesHelped] = React.useState({
+    total: 0,
+    currentMonth: 0,
+    previousMonth: 0
+  });
+  const [loading, setLoading] = React.useState(true);
+  const [communityStories, setCommunityStories] = React.useState<{
+    id: string;
+    title: string;
+    excerpt: string;
+    body: string;
+    image: string;
+  }[]>([]);
+
+  const loadCommunityStories = React.useCallback(async () => {
+    try {
+      console.log('Fetching community stories...');
+      const storiesRef = collection(db, 'communityStory');
+      const querySnapshot = await getDocs(storiesRef);
+      
+      const stories = querySnapshot.docs
+        .map(doc => {
+          const data = doc.data();
+          return {
+            id: doc.id,
+            title: data.title || 'No Title',
+            excerpt: data.excerpt || '',
+            body: data.body || '',
+            image: data.image || ''
+          };
+        })
+        .filter(story => story.title && story.excerpt && story.body && story.image);
+      
+      console.log('Fetched stories:', stories);
+      setCommunityStories(stories);
+    } catch (error) {
+      console.error('Error loading community stories:', error);
+    }
+  }, []);
+
+  const calculatePercentageChange = (current: number, previous: number) => {
+    if (previous === 0) return current > 0 ? 100 : 0;
+    return ((current - previous) / previous) * 100;
+  };
+
+  const loadImpactData = React.useCallback(async () => {
+    try {
+      if (!user) return;
+      
+      setLoading(true);
+      const donationsRef = collection(db, 'donations');
+      const q = query(donationsRef, where('userId', '==', user.uid));
+      const querySnapshot = await getDocs(q);
+      
+      const now = new Date();
+      const currentMonth = now.getMonth();
+      const currentYear = now.getFullYear();
+      
+      let totalDonatedEnergy = 0;
+      let currentMonthEnergy = 0;
+      let previousMonthEnergy = 0;
+      
+      querySnapshot.forEach((doc) => {
+        const data = doc.data();
+        const amount = typeof data?.amountCoins === 'number' ? data.amountCoins : 0;
+        totalDonatedEnergy += amount;
+        
+        let created: Date | null = null;
+        if (data?.createdAt?.toDate) {
+          created = data.createdAt.toDate();
+        } else if (data?.createdAt instanceof Date) {
+          created = data.createdAt;
+        }
+        
+        if (created) {
+          const docMonth = created.getMonth();
+          const docYear = created.getFullYear();
+          
+          if (docMonth === currentMonth && docYear === currentYear) {
+            currentMonthEnergy += amount;
+          } else if (docMonth === (currentMonth === 0 ? 11 : currentMonth - 1) && 
+                    (docMonth === 11 ? docYear === currentYear - 1 : docYear === currentYear)) {
+            previousMonthEnergy += amount;
+          }
+        }
+      });
+      
+      // Calculate families helped for total, current month, and previous month
+      const totalFamilies = totalDonatedEnergy > 0 ? Math.max(1, Math.floor(totalDonatedEnergy / 50)) : 0;
+      const currentMonthFamilies = currentMonthEnergy > 0 ? Math.max(1, Math.floor(currentMonthEnergy / 50)) : 0;
+      const previousMonthFamilies = previousMonthEnergy > 0 ? Math.max(1, Math.floor(previousMonthEnergy / 50)) : 0;
+      
+      setDonatedEnergy({
+        total: totalDonatedEnergy,
+        currentMonth: currentMonthEnergy,
+        previousMonth: previousMonthEnergy
+      });
+      
+      setFamiliesHelped({
+        total: totalFamilies,
+        currentMonth: currentMonthFamilies,
+        previousMonth: previousMonthFamilies
+      });
+      
+      // Update families data with actual monthly values
+      const monthlyFamiliesData = calculateMonthlyFamilies(querySnapshot.docs);
+      setFamiliesData(monthlyFamiliesData);
+      
+    } catch (error) {
+      console.error('Error loading impact data:', error);
+    } finally {
+      setLoading(false);
+    }
+  }, [user]);
+
+  // Load data on component mount and when screen comes into focus
+  useFocusEffect(
+    React.useCallback(() => {
+      loadImpactData();
+      loadCommunityStories();
+    }, [loadImpactData, loadCommunityStories])
+  );
 
   // Chart data for CO2 Saved Over Time
   const co2ChartData = {
@@ -35,15 +166,78 @@ export default function Impact() {
     legend: ["CO2 Saved (kg)"],
   };
 
-  // Bar chart data for Families Helped
-  const familiesData = [
-    { month: "Jan", value: 8 },
-    { month: "Feb", value: 2 },
-    { month: "Mar", value: 6 },
-    { month: "Apr", value: 5 },
-    { month: "May", value: 10 },
-    { month: "Jun", value: 9 },
-  ];
+  // Get month names for the last 6 months
+  const getLast6Months = () => {
+    const months = [];
+    const date = new Date();
+    const monthNames = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+    
+    for (let i = 5; i >= 0; i--) {
+      const d = new Date(date.getFullYear(), date.getMonth() - i, 1);
+      months.push(monthNames[d.getMonth()]);
+    }
+    return months;
+  };
+
+  // Bar chart data for Families Helped - last 6 months
+  const [familiesData, setFamiliesData] = React.useState<{month: string, value: number}[]>([
+    { month: "Jan", value: 0 },
+    { month: "Feb", value: 0 },
+    { month: "Mar", value: 0 },
+    { month: "Apr", value: 0 },
+    { month: "May", value: 0 },
+    { month: "Jun", value: 0 },
+  ]);
+  
+  // Calculate families helped per month from donations
+  const calculateMonthlyFamilies = React.useCallback((donations: any[]) => {
+    const now = new Date();
+    const currentYear = now.getFullYear();
+    const currentMonth = now.getMonth();
+    
+    // Initialize last 6 months data with zeros for energy and families
+    const monthlyEnergy = Array(6).fill(0);
+    const monthNames = getLast6Months();
+    
+    // First, sum up all energy donations per month
+    donations.forEach(donation => {
+      const data = donation.data();
+      const amount = typeof data?.amountCoins === 'number' ? data.amountCoins : 0;
+      
+      let created: Date | null = null;
+      if (data?.createdAt?.toDate) {
+        created = data.createdAt.toDate();
+      } else if (data?.createdAt instanceof Date) {
+        created = data.createdAt;
+      }
+      
+      if (created) {
+        const docMonth = created.getMonth();
+        const docYear = created.getFullYear();
+        
+        // Calculate how many months ago this was (0-5)
+        const monthsAgo = (currentYear - docYear) * 12 + (currentMonth - docMonth);
+        
+        // If within last 6 months, add to the corresponding month
+        if (monthsAgo >= 0 && monthsAgo < 6) {
+          monthlyEnergy[5 - monthsAgo] += amount; // 5 - monthsAgo to get the correct index (0-5)
+        }
+      }
+    });
+    
+    // Then calculate families helped based on total energy per month
+    const monthlyFamilies = monthlyEnergy.map(energy => 
+      energy > 0 ? Math.max(1, Math.floor(energy / 50)) : 0
+    );
+    
+    // Format the data for the chart
+    const formattedData = monthNames.map((month, index) => ({
+      month,
+      value: monthlyFamilies[index] || 0
+    }));
+    
+    return formattedData;
+  }, []);
 
   // Helpers for dynamic Y axis scaling (nice numbers)
   const getNiceMax = (maxVal: number): number => {
@@ -122,8 +316,16 @@ export default function Impact() {
                 <Text className="text-gray-300 text-sm mb-1">
                   Donated Energy
                 </Text>
-                <Text className="text-white text-2xl font-bold">1,040 kWh</Text>
-                <Text className="text-[#1AE57D] text-sm mt-1">+5%</Text>
+                <Text className="text-white text-2xl font-bold">
+                  {loading ? '...' : `${donatedEnergy.total.toLocaleString()} kWh`}
+                </Text>
+                {!loading && (
+                  <Text className={`text-sm mt-1 ${donatedEnergy.currentMonth >= donatedEnergy.previousMonth ? 'text-[#1AE57D]' : 'text-red-500'}`}>
+                    {donatedEnergy.previousMonth === 0 ? 
+                      (donatedEnergy.currentMonth > 0 ? 'New!' : '') : 
+                      `${donatedEnergy.currentMonth >= donatedEnergy.previousMonth ? '+' : '-'}${Math.abs(Math.round(calculatePercentageChange(donatedEnergy.currentMonth, donatedEnergy.previousMonth)))}% from last month`}
+                  </Text>
+                )}
               </View>
 
               {/* CO2 Emissions Avoided */}
@@ -139,8 +341,8 @@ export default function Impact() {
             {/* Second Row */}
             <View className="flex-row mt-3">
               {/* Clean Energy Generated */}
-              <View className="flex-1 mr-2 bg-[#1a4d3a] rounded-2xl py-6 pl-3">
-                <Text className="text-gray-300 text-sm mb-1">
+              <View className="flex-1 mr-2 bg-[#1a4d3a] rounded-2xl pt-6 pb-9 pl-3">
+                <Text className="text-gray-300 text-sm mb-1 mt-[-7px]">
                   Helped Project
                 </Text>
                 <Text className="text-white text-2xl font-bold">12</Text>
@@ -152,8 +354,16 @@ export default function Impact() {
                 <Text className="text-gray-300 text-sm mb-1">
                   Helped Families
                 </Text>
-                <Text className="text-white text-2xl font-bold">18</Text>
-                <Text className="text-[#1AE57D] text-sm mt-1">+6%</Text>
+                <Text className="text-white text-2xl font-bold">
+                  {loading ? '...' : familiesHelped.total.toLocaleString()}
+                </Text>
+                {!loading && (
+                  <Text className={`text-sm mt-1 ${familiesHelped.currentMonth >= familiesHelped.previousMonth ? 'text-[#1AE57D]' : 'text-red-500'}`}>
+                    {familiesHelped.previousMonth === 0 ? 
+                      (familiesHelped.currentMonth > 0 ? 'New!' : '') : 
+                      `${familiesHelped.currentMonth >= familiesHelped.previousMonth ? '+' : '-'}${Math.abs(Math.round(calculatePercentageChange(familiesHelped.currentMonth, familiesHelped.previousMonth)))}% from last month`}
+                  </Text>
+                )}
               </View>
             </View>
           </View>
@@ -237,10 +447,23 @@ export default function Impact() {
           </Text>
           <View className="flex-row items-center gap-2 mb-1">
             <Globe size={24} color="#2ECC71" />
-            <Text className="text-[#1AE57D] text-3xl font-bold ">18</Text>
+            <Text className="text-[#1AE57D] text-3xl font-bold">
+              {!loading ? familiesData.reduce((sum, month) => sum + month.value, 0).toLocaleString() : '...'}
+            </Text>
           </View>
           <Text className="text-gray-400 text-sm mb-7">
-            Last 6 Month <Text className="text-[#1AE57D]">+8%</Text>
+            Last 6 Months {!loading ? (
+              familiesData[0].value > 0 && familiesData[5].value > 0 ? (
+                <Text className={familiesData[5].value >= familiesData[0].value ? 'text-[#1AE57D]' : 'text-red-500'}>
+                  {familiesData[5].value >= familiesData[0].value ? '+' : '-'}
+                  {Math.abs(Math.round(
+                    ((familiesData[5].value - familiesData[0].value) / familiesData[0].value) * 100
+                  ))}%
+                </Text>
+              ) : familiesData[5].value > 0 ? (
+                <Text className="text-[#1AE57D]">New!</Text>
+              ) : null
+            ) : '...'}
           </Text>
 
           {/* Bar Chart */}
@@ -341,7 +564,7 @@ export default function Impact() {
             </View>
             <View className="flex-row justify-center items-center mt-2">
               <View className="w-2 h-2 rounded-full bg-[#1AE57D] mr-2" />
-              <Text className="text-gray-400 text-xs ">2025</Text>
+              <Text className="text-gray-400 text-xs ">{new Date().getFullYear()}</Text>
             </View>
           </View>
         </View>
@@ -352,34 +575,13 @@ export default function Impact() {
         </Text>
 
         {(() => {
-          const stories = [
-            {
-              id: "1",
-              title: "Powering Safe Nights",
-              image:
-                "https://images.unsplash.com/photo-1488521787991-ed7bbaae773c?w=400",
-              excerpt: "You & 200 others powered safe nights for 80 families.",
-              body: "Through your contributions, we installed solar lanterns and micro-grids that now power safe nights for 80 families. Children can study, and parents can work in the evenings without relying on unsafe kerosene lamps.",
-            },
-            {
-              id: "2",
-              title: "Lighting Classrooms",
-              image:
-                "https://images.unsplash.com/photo-1497633762265-9d179a990aa6?w=400",
-              excerpt:
-                "Together, the community lit up 3 classrooms in rural schools.",
-              body: "A collaborative effort brought clean electricity to 3 classrooms, enabling evening classes and computer literacy programs for students in rural areas.",
-            },
-            {
-              id: "3",
-              title: "Village Solar Upgrade",
-              image:
-                "https://images.unsplash.com/photo-1509391366360-2e959784a276?w=400",
-              excerpt:
-                "New solar panels will provide clean energy in the village.",
-              body: "We completed a set of rooftop installations to stabilize power for essential services like water pumps and health posts, reducing outages and diesel usage.",
-            },
-          ];
+          if (communityStories.length === 0) {
+            return (
+              <View className="flex-1 items-center justify-center py-10">
+                <Text className="text-gray-400">No community stories available</Text>
+              </View>
+            );
+          }
 
           return (
             <ScrollView
@@ -388,7 +590,7 @@ export default function Impact() {
               className="mb-3 mx-2"
               contentContainerStyle={{ paddingRight: -2 }}
             >
-              {stories.map((story) => (
+              {communityStories.map((story) => (
                 <TouchableOpacity
                   key={story.id}
                   className="w-64 mr-4"
@@ -401,15 +603,22 @@ export default function Impact() {
                         title: story.title,
                         image: story.image,
                         body: story.body,
+                        excerpt: story.excerpt,
                       },
                     })
                   }
                 >
-                  <Image
-                    source={{ uri: story.image }}
-                    className="w-full h-40 rounded-2xl mb-3"
-                    resizeMode="cover"
-                  />
+                  <View className="w-full h-40 rounded-2xl mb-3 bg-gray-700 overflow-hidden">
+                    <Image
+                      source={{ uri: story.image }}
+                      className="w-full h-full"
+                      resizeMode="cover"
+                      onError={(error) => {
+                        console.log('Error loading image:', error.nativeEvent.error);
+                      }}
+                      defaultSource={require('@/assets/images/impact_image.png')}
+                    />
+                  </View>
                   <Text className="text-gray-300 text-sm leading-5">
                     {story.excerpt}
                   </Text>
