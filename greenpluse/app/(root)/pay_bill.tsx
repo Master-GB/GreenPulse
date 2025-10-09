@@ -12,7 +12,7 @@ import {
 } from "react-native";
 import Slider from "@react-native-community/slider";
 import { Ionicons } from "@expo/vector-icons";
-import { useRouter } from "expo-router";
+import { useRouter, useFocusEffect } from "expo-router";
 import { router } from "expo-router";
 import { collection, query, where, getDocs } from "firebase/firestore";
 import { db } from "../../config/firebaseConfig";
@@ -140,6 +140,19 @@ const PayBill: React.FC = () => {
   }, [user]);
 
   // Add effect to log component mount and user changes
+  // Add focus effect to refresh accounts when screen comes into focus
+  useFocusEffect(
+    useCallback(() => {
+      console.log("Screen focused, refreshing accounts...");
+      if (user) {
+        fetchAccounts().catch((error) => {
+          console.error("Error refreshing accounts:", error);
+        });
+      }
+    }, [user, fetchAccounts])
+  );
+
+  // Initial load and user change effect
   useEffect(() => {
     console.log("A. Component mounted or user changed");
     console.log(
@@ -199,9 +212,9 @@ const PayBill: React.FC = () => {
       }
     } else if (accounts.length === 0) {
       console.log("I. No accounts available");
-      setAccountNumber("");
+      setAccountNumber(" No account number available");
       setAccountNickname("");
-      setServiceAddress("No accounts available");
+      setServiceAddress("No service address available");
       setProvider("Add a utility account to get started");
     }
   }, [accounts, selectedAccountIndex]);
@@ -312,9 +325,9 @@ const PayBill: React.FC = () => {
           </View>
           <View className=" items-center px-10">
             <TouchableOpacity
-              className={`py-3 w-full max-w-md rounded-3xl mt-6 items-center justify-center ${!accountNumber ? "bg-[#00ff8898]" : "bg-[#00ff88]"}`}
+              className={`py-3 w-full max-w-md rounded-3xl mt-6 items-center justify-center ${!accountNumber || accounts.length === 0 ? "bg-[#00ff8898]" : "bg-[#00ff88]"}`}
               onPress={() => {
-                if (accountNumber) {
+                if (accountNumber && accounts.length > 0) {
                   router.push({
                     pathname: "/(root)/bill_payment_summary",
                     params: {
@@ -328,7 +341,7 @@ const PayBill: React.FC = () => {
                   });
                 }
               }}
-              disabled={!accountNumber}
+              disabled={!accountNumber || accounts.length === 0}
             >
               <Text className="text-black font-semibold text-base">
                 Continue
