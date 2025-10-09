@@ -1,8 +1,28 @@
-import React, { useState } from 'react';
-import { View, Text, TextInput, TouchableOpacity, ScrollView, Image } from 'react-native';
+import React, { useState, useEffect } from 'react';
+import { View, Text, TextInput, TouchableOpacity, ScrollView, Image, Alert, ActivityIndicator, StatusBar } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { ArrowLeft, Upload, MapPin, FileText, ChevronDown } from 'lucide-react-native';
+import { useRouter, useLocalSearchParams } from 'expo-router';
+import { db, auth } from '@/config/firebaseConfig';
+import { collection, addDoc, serverTimestamp, doc, getDoc, updateDoc } from 'firebase/firestore';
+import * as ImagePicker from 'expo-image-picker';
+import * as DocumentPicker from 'expo-document-picker';
 
 const RequestProject = () => {
+  const router = useRouter();
+  const params = useLocalSearchParams();
+  const editDocId = params.docId as string | undefined;
+  const isEditMode = !!editDocId;
+  
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isLoading, setIsLoading] = useState(false);
+  const [showPropertyDropdown, setShowPropertyDropdown] = useState(false);
+  const [showEnergyDropdown, setShowEnergyDropdown] = useState(false);
+  const [uploadedFiles, setUploadedFiles] = useState({
+    idDocument: null as string | null,
+    landDocument: null as string | null,
+    photos: [] as string[]
+  });
   const [formData, setFormData] = useState({
     fullName: '',
     licenseNumber: '',
@@ -25,24 +45,273 @@ const RequestProject = () => {
   const propertyTypes = ['Residential', 'Commercial', 'Industrial', 'Agricultural'];
   const energySystems = ['Solar Panel', 'Wind Turbine', 'Hybrid System', 'Biogas', 'Hydroelectric'];
 
+  // Load existing project data when editing
+  useEffect(() => {
+    if (isEditMode && editDocId) {
+      loadProjectData();
+    }
+  }, [editDocId]);
+
+  const loadProjectData = async () => {
+    setIsLoading(true);
+    try {
+      const docRef = doc(db, 'projectRequests', editDocId!);
+      const docSnap = await getDoc(docRef);
+      
+      if (docSnap.exists()) {
+        const data = docSnap.data();
+        setFormData({
+          fullName: data.fullName || '',
+          licenseNumber: data.licenseNumber || '',
+          phoneNumber: data.phoneNumber || '',
+          email: data.email || '',
+          address: data.address || '',
+          landReference: data.landReference || '',
+          propertyType: data.propertyType || '',
+          projectTitle: data.projectTitle || '',
+          projectDescription: data.projectDescription || '',
+          energySystem: data.energySystem || '',
+          energyNeed: data.energyNeed || '',
+          terms: {
+            accurate: true,
+            shareEnergy: true,
+            verification: true
+          }
+        });
+      } else {
+        Alert.alert('Error', 'Project not found');
+        router.back();
+      }
+    } catch (error) {
+      console.error('Load error:', error);
+      Alert.alert('Error', 'Failed to load project data');
+      router.back();
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleImagePick = async (type: 'id' | 'land' | 'photo') => {
+    try {
+      // Request permissions
+      const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+      if (status !== 'granted') {
+        Alert.alert('Permission Denied', 'We need camera roll permissions to upload images');
+        return;
+      }
+
+      // Launch image picker
+      const result = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: 'images' as any,
+        allowsEditing: true,
+        aspect: [4, 3],
+        quality: 0.8,
+      });
+
+      if (!result.canceled && result.assets[0]) {
+        const uri = result.assets[0].uri;
+        
+        if (type === 'id') {
+          setUploadedFiles(prev => ({ ...prev, idDocument: uri }));
+          Alert.alert('Success', 'ID document uploaded successfully');
+        } else if (type === 'land') {
+          setUploadedFiles(prev => ({ ...prev, landDocument: uri }));
+          Alert.alert('Success', 'Land document uploaded successfully');
+        } else if (type === 'photo') {
+          setUploadedFiles(prev => ({ ...prev, photos: [...prev.photos, uri] }));
+          Alert.alert('Success', `Photo uploaded (${uploadedFiles.photos.length + 1} total)`);
+        }
+      }
+    } catch (error) {
+      console.error('Image picker error:', error);
+      Alert.alert('Error', 'Failed to pick image');
+    }
+  };
+
+  const handleDocumentPick = async (type: 'id' | 'land') => {
+    try {
+      const result = await DocumentPicker.getDocumentAsync({
+        type: ['application/pdf', 'image/*'],
+        copyToCacheDirectory: true,
+      });
+
+      if (result.assets && result.assets[0]) {
+        const uri = result.assets[0].uri;
+        
+        if (type === 'id') {
+          setUploadedFiles(prev => ({ ...prev, idDocument: uri }));
+          Alert.alert('Success', 'ID document uploaded successfully');
+        } else if (type === 'land') {
+          setUploadedFiles(prev => ({ ...prev, landDocument: uri }));
+          Alert.alert('Success', 'Land document uploaded successfully');
+        }
+      }
+    } catch (error) {
+      console.error('Document picker error:', error);
+      Alert.alert('Error', 'Failed to pick document');
+    }
+  };
+
+  const handleLocationPick = () => {
+    Alert.alert('Location', 'Map location picker will be implemented');
+    // TODO: Implement with expo-location and map
+  };
+
+  const validateForm = () => {
+    if (!formData.fullName.trim()) {
+      Alert.alert('Validation Error', 'Please enter your full name');
+      return false;
+    }
+    if (!formData.licenseNumber.trim()) {
+      Alert.alert('Validation Error', 'Please enter your ID number');
+      return false;
+    }
+    if (!formData.phoneNumber.trim()) {
+      Alert.alert('Validation Error', 'Please enter your phone number');
+      return false;
+    }
+    if (!formData.email.trim()) {
+      Alert.alert('Validation Error', 'Please enter your email');
+      return false;
+    }
+    if (!formData.address.trim()) {
+      Alert.alert('Validation Error', 'Please enter the project address');
+      return false;
+    }
+    if (!formData.projectTitle.trim()) {
+      Alert.alert('Validation Error', 'Please enter project title');
+      return false;
+    }
+    if (!formData.projectDescription.trim()) {
+      Alert.alert('Validation Error', 'Please enter project description');
+      return false;
+    }
+    if (!formData.terms.accurate || !formData.terms.shareEnergy || !formData.terms.verification) {
+      Alert.alert('Validation Error', 'Please accept all terms and agreements');
+      return false;
+    }
+    return true;
+  };
+
+  const handleSubmit = async () => {
+    if (!validateForm()) return;
+
+    setIsSubmitting(true);
+
+    try {
+      const user = auth.currentUser;
+      if (!user) {
+        Alert.alert('Authentication Error', 'Please sign in to submit a project request');
+        setIsSubmitting(false);
+        return;
+      }
+
+      const projectData = {
+        userId: user.uid,
+        userEmail: user.email,
+        fullName: formData.fullName,
+        licenseNumber: formData.licenseNumber,
+        phoneNumber: formData.phoneNumber,
+        email: formData.email,
+        address: formData.address,
+        landReference: formData.landReference,
+        propertyType: formData.propertyType,
+        projectTitle: formData.projectTitle,
+        projectDescription: formData.projectDescription,
+        energySystem: formData.energySystem,
+        energyNeed: formData.energyNeed,
+        status: 'Pending',
+        updatedAt: serverTimestamp()
+      };
+
+      if (isEditMode && editDocId) {
+        // Update existing project
+        const docRef = doc(db, 'projectRequests', editDocId);
+        await updateDoc(docRef, projectData);
+        
+        console.log('Project request updated with ID:', editDocId);
+
+        Alert.alert(
+          'Success!',
+          'Your project request has been updated successfully.',
+          [
+            {
+              text: 'View My Requests',
+              onPress: () => router.push('/(root)/MyRequestProject')
+            }
+          ]
+        );
+      } else {
+        // Create new project
+        const newProjectData = {
+          ...projectData,
+          submittedDate: serverTimestamp(),
+          createdAt: serverTimestamp()
+        };
+
+        const docRef = await addDoc(collection(db, 'projectRequests'), newProjectData);
+        
+        console.log('Project request submitted with ID:', docRef.id);
+
+        Alert.alert(
+          'Success!',
+          'Your project request has been submitted successfully. You will receive updates via email.',
+          [
+            {
+              text: 'View My Requests',
+              onPress: () => router.push('/(root)/MyRequestProject')
+            }
+          ]
+        );
+      }
+    } catch (error) {
+      console.error('Submit error:', error);
+      Alert.alert(
+        'Submission Failed',
+        error instanceof Error ? error.message : 'An error occurred while submitting your request. Please try again.'
+      );
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
   return (
-    <View style={{ flex: 1, backgroundColor: '#0a0a0a' }}>
+    <SafeAreaView style={{ flex: 1, backgroundColor: '#0a0a0a' }}>
+      <StatusBar barStyle="light-content" />
+      
       {/* Header */}
-      <View style={{ 
-        flexDirection: 'row', 
-        alignItems: 'center', 
-        paddingHorizontal: 16,
-        paddingTop: 48,
-        paddingBottom: 16,
+      <View style={{
+        flexDirection: 'row',
+        alignItems: 'center',
+        paddingHorizontal: 20,
+        paddingVertical: 12,
         backgroundColor: '#0a0a0a'
       }}>
-        <TouchableOpacity style={{ marginRight: 16 }}>
-          <ArrowLeft size={24} color="white" />
+        <TouchableOpacity 
+          style={{ marginRight: 16 }}
+          onPress={() => router.back()}
+        >
+          <ArrowLeft size={28} color="white" />
         </TouchableOpacity>
-        <Text style={{ color: 'white', fontSize: 20, fontWeight: '700' }}>
-          Request a Project
+        <Text style={{
+          color: 'white',
+          fontSize: 24,
+          fontWeight: '700',
+          flex: 1
+        }}>
+          {isEditMode ? 'Edit Project Request' : 'Request a Project'}
         </Text>
       </View>
+
+      {/* Loading Indicator */}
+      {isLoading && (
+        <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
+          <ActivityIndicator size="large" color="#16A34A" />
+          <Text style={{ color: '#737373', marginTop: 12 }}>Loading project data...</Text>
+        </View>
+      )}
+
+      {!isLoading && (
 
       <ScrollView 
         style={{ flex: 1 }}
@@ -139,19 +408,22 @@ const RequestProject = () => {
           />
 
           {/* Upload ID Button */}
-          <TouchableOpacity style={{
-            flexDirection: 'row',
-            alignItems: 'center',
-            backgroundColor: '#171717',
-            borderRadius: 12,
-            padding: 16,
-            marginBottom: 16,
-            borderWidth: 1,
-            borderColor: '#262626'
-          }}>
-            <Upload size={20} color="#737373" />
-            <Text style={{ color: '#a3a3a3', fontSize: 14, marginLeft: 8, flex: 1 }}>
-              Upload ID Document
+          <TouchableOpacity 
+            style={{
+              flexDirection: 'row',
+              alignItems: 'center',
+              backgroundColor: '#171717',
+              borderRadius: 12,
+              padding: 16,
+              marginBottom: 8,
+              borderWidth: 1,
+              borderColor: uploadedFiles.idDocument ? '#16A34A' : '#262626'
+            }}
+            onPress={() => handleImagePick('id')}
+          >
+            <Upload size={20} color={uploadedFiles.idDocument ? '#16A34A' : '#737373'} />
+            <Text style={{ color: uploadedFiles.idDocument ? '#16A34A' : '#a3a3a3', fontSize: 14, marginLeft: 8, flex: 1 }}>
+              {uploadedFiles.idDocument ? 'ID Document Uploaded ✓' : 'Upload ID Document'}
             </Text>
             <View style={{
               backgroundColor: '#16A34A',
@@ -159,9 +431,22 @@ const RequestProject = () => {
               paddingVertical: 6,
               borderRadius: 8
             }}>
-              <Text style={{ color: 'white', fontSize: 13, fontWeight: '600' }}>Upload</Text>
+              <Text style={{ color: 'white', fontSize: 13, fontWeight: '600' }}>
+                {uploadedFiles.idDocument ? 'Change' : 'Upload'}
+              </Text>
             </View>
           </TouchableOpacity>
+          
+          {/* ID Document Preview */}
+          {uploadedFiles.idDocument && (
+            <View style={{ marginBottom: 16, borderRadius: 12, overflow: 'hidden' }}>
+              <Image 
+                source={{ uri: uploadedFiles.idDocument }} 
+                style={{ width: '100%', height: 150, borderRadius: 12 }}
+                resizeMode="cover"
+              />
+            </View>
+          )}
 
           {/* Phone Number */}
           <Text style={{ color: '#a3a3a3', fontSize: 14, fontWeight: '600', marginBottom: 8 }}>
@@ -277,16 +562,19 @@ const RequestProject = () => {
           />
 
           {/* Pick Location Button */}
-          <TouchableOpacity style={{
-            flexDirection: 'row',
-            alignItems: 'center',
-            backgroundColor: '#171717',
-            borderRadius: 12,
-            padding: 16,
-            marginBottom: 12,
-            borderWidth: 1,
-            borderColor: '#262626'
-          }}>
+          <TouchableOpacity 
+            style={{
+              flexDirection: 'row',
+              alignItems: 'center',
+              backgroundColor: '#171717',
+              borderRadius: 12,
+              padding: 16,
+              marginBottom: 12,
+              borderWidth: 1,
+              borderColor: '#262626'
+            }}
+            onPress={handleLocationPick}
+          >
             <MapPin size={20} color="#737373" />
             <Text style={{ color: '#a3a3a3', fontSize: 14, marginLeft: 8, flex: 1 }}>
               Pick Location
@@ -302,19 +590,22 @@ const RequestProject = () => {
           </TouchableOpacity>
 
           {/* Upload Land Document Button */}
-          <TouchableOpacity style={{
-            flexDirection: 'row',
-            alignItems: 'center',
-            backgroundColor: '#171717',
-            borderRadius: 12,
-            padding: 16,
-            marginBottom: 16,
-            borderWidth: 1,
-            borderColor: '#262626'
-          }}>
-            <FileText size={20} color="#737373" />
-            <Text style={{ color: '#a3a3a3', fontSize: 14, marginLeft: 8, flex: 1 }}>
-              Upload Land Document
+          <TouchableOpacity 
+            style={{
+              flexDirection: 'row',
+              alignItems: 'center',
+              backgroundColor: '#171717',
+              borderRadius: 12,
+              padding: 16,
+              marginBottom: 8,
+              borderWidth: 1,
+              borderColor: uploadedFiles.landDocument ? '#16A34A' : '#262626'
+            }}
+            onPress={() => handleImagePick('land')}
+          >
+            <FileText size={20} color={uploadedFiles.landDocument ? '#16A34A' : '#737373'} />
+            <Text style={{ color: uploadedFiles.landDocument ? '#16A34A' : '#a3a3a3', fontSize: 14, marginLeft: 8, flex: 1 }}>
+              {uploadedFiles.landDocument ? 'Land Document Uploaded ✓' : 'Upload Land Document'}
             </Text>
             <View style={{
               backgroundColor: '#16A34A',
@@ -322,9 +613,22 @@ const RequestProject = () => {
               paddingVertical: 6,
               borderRadius: 8
             }}>
-              <Text style={{ color: 'white', fontSize: 13, fontWeight: '600' }}>Upload</Text>
+              <Text style={{ color: 'white', fontSize: 13, fontWeight: '600' }}>
+                {uploadedFiles.landDocument ? 'Change' : 'Upload'}
+              </Text>
             </View>
           </TouchableOpacity>
+          
+          {/* Land Document Preview */}
+          {uploadedFiles.landDocument && (
+            <View style={{ marginBottom: 16, borderRadius: 12, overflow: 'hidden' }}>
+              <Image 
+                source={{ uri: uploadedFiles.landDocument }} 
+                style={{ width: '100%', height: 150, borderRadius: 12 }}
+                resizeMode="cover"
+              />
+            </View>
+          )}
 
           {/* Land Reference Number */}
           <Text style={{ color: '#a3a3a3', fontSize: 14, fontWeight: '600', marginBottom: 8 }}>
@@ -351,21 +655,46 @@ const RequestProject = () => {
           <Text style={{ color: '#a3a3a3', fontSize: 14, fontWeight: '600', marginBottom: 8 }}>
             Property Type
           </Text>
-          <TouchableOpacity style={{
-            flexDirection: 'row',
-            alignItems: 'center',
-            backgroundColor: '#171717',
-            borderRadius: 12,
-            padding: 16,
-            marginBottom: 24,
-            borderWidth: 1,
-            borderColor: '#262626'
-          }}>
-            <Text style={{ color: '#737373', fontSize: 15, flex: 1 }}>
+          <TouchableOpacity 
+            style={{
+              flexDirection: 'row',
+              alignItems: 'center',
+              backgroundColor: '#171717',
+              borderRadius: 12,
+              padding: 16,
+              marginBottom: 8,
+              borderWidth: 1,
+              borderColor: '#262626'
+            }}
+            onPress={() => setShowPropertyDropdown(!showPropertyDropdown)}
+          >
+            <Text style={{ color: formData.propertyType ? 'white' : '#737373', fontSize: 15, flex: 1 }}>
               {formData.propertyType || 'Select property type'}
             </Text>
             <ChevronDown size={20} color="#737373" />
           </TouchableOpacity>
+          
+          {/* Property Type Dropdown */}
+          {showPropertyDropdown && (
+            <View style={{ backgroundColor: '#171717', borderRadius: 12, marginBottom: 16, borderWidth: 1, borderColor: '#262626' }}>
+              {propertyTypes.map((type) => (
+                <TouchableOpacity
+                  key={type}
+                  style={{ padding: 16, borderBottomWidth: 1, borderBottomColor: '#262626' }}
+                  onPress={() => {
+                    setFormData({...formData, propertyType: type});
+                    setShowPropertyDropdown(false);
+                  }}
+                >
+                  <Text style={{ color: formData.propertyType === type ? '#16A34A' : 'white', fontSize: 15 }}>
+                    {type}
+                  </Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+          )}
+          
+          {!showPropertyDropdown && <View style={{ marginBottom: 16 }} />}
         </View>
 
         {/* Solar Panel Image */}
@@ -471,21 +800,46 @@ const RequestProject = () => {
           <Text style={{ color: '#a3a3a3', fontSize: 14, fontWeight: '600', marginBottom: 8 }}>
             Type of Energy System
           </Text>
-          <TouchableOpacity style={{
-            flexDirection: 'row',
-            alignItems: 'center',
-            backgroundColor: '#171717',
-            borderRadius: 12,
-            padding: 16,
-            marginBottom: 16,
-            borderWidth: 1,
-            borderColor: '#262626'
-          }}>
-            <Text style={{ color: '#737373', fontSize: 15, flex: 1 }}>
+          <TouchableOpacity 
+            style={{
+              flexDirection: 'row',
+              alignItems: 'center',
+              backgroundColor: '#171717',
+              borderRadius: 12,
+              padding: 16,
+              marginBottom: 8,
+              borderWidth: 1,
+              borderColor: '#262626'
+            }}
+            onPress={() => setShowEnergyDropdown(!showEnergyDropdown)}
+          >
+            <Text style={{ color: formData.energySystem ? 'white' : '#737373', fontSize: 15, flex: 1 }}>
               {formData.energySystem || 'Select energy system'}
             </Text>
             <ChevronDown size={20} color="#737373" />
           </TouchableOpacity>
+          
+          {/* Energy System Dropdown */}
+          {showEnergyDropdown && (
+            <View style={{ backgroundColor: '#171717', borderRadius: 12, marginBottom: 16, borderWidth: 1, borderColor: '#262626' }}>
+              {energySystems.map((system) => (
+                <TouchableOpacity
+                  key={system}
+                  style={{ padding: 16, borderBottomWidth: 1, borderBottomColor: '#262626' }}
+                  onPress={() => {
+                    setFormData({...formData, energySystem: system});
+                    setShowEnergyDropdown(false);
+                  }}
+                >
+                  <Text style={{ color: formData.energySystem === system ? '#16A34A' : 'white', fontSize: 15 }}>
+                    {system}
+                  </Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+          )}
+          
+          {!showEnergyDropdown && <View style={{ marginBottom: 8 }} />}
 
           {/* Estimated Energy Need */}
           <Text style={{ color: '#a3a3a3', fontSize: 14, fontWeight: '600', marginBottom: 8 }}>
@@ -510,19 +864,24 @@ const RequestProject = () => {
           />
 
           {/* Attach Supporting Photos */}
-          <TouchableOpacity style={{
-            flexDirection: 'row',
-            alignItems: 'center',
-            backgroundColor: '#171717',
-            borderRadius: 12,
-            padding: 16,
-            marginBottom: 24,
-            borderWidth: 1,
-            borderColor: '#262626'
-          }}>
-            <Upload size={20} color="#737373" />
-            <Text style={{ color: '#a3a3a3', fontSize: 14, marginLeft: 8, flex: 1 }}>
-              Attach Supporting Photos (Optional)
+          <TouchableOpacity 
+            style={{
+              flexDirection: 'row',
+              alignItems: 'center',
+              backgroundColor: '#171717',
+              borderRadius: 12,
+              padding: 16,
+              marginBottom: 8,
+              borderWidth: 1,
+              borderColor: uploadedFiles.photos.length > 0 ? '#16A34A' : '#262626'
+            }}
+            onPress={() => handleImagePick('photo')}
+          >
+            <Upload size={20} color={uploadedFiles.photos.length > 0 ? '#16A34A' : '#737373'} />
+            <Text style={{ color: uploadedFiles.photos.length > 0 ? '#16A34A' : '#a3a3a3', fontSize: 14, marginLeft: 8, flex: 1 }}>
+              {uploadedFiles.photos.length > 0 
+                ? `${uploadedFiles.photos.length} Photo(s) Uploaded ✓` 
+                : 'Attach Supporting Photos (Optional)'}
             </Text>
             <View style={{
               backgroundColor: '#16A34A',
@@ -530,9 +889,28 @@ const RequestProject = () => {
               paddingVertical: 6,
               borderRadius: 8
             }}>
-              <Text style={{ color: 'white', fontSize: 13, fontWeight: '600' }}>Upload</Text>
+              <Text style={{ color: 'white', fontSize: 13, fontWeight: '600' }}>
+                {uploadedFiles.photos.length > 0 ? 'Add More' : 'Upload'}
+              </Text>
             </View>
           </TouchableOpacity>
+          
+          {/* Photos Preview */}
+          {uploadedFiles.photos.length > 0 && (
+            <View style={{ marginBottom: 24 }}>
+              <ScrollView horizontal showsHorizontalScrollIndicator={false}>
+                {uploadedFiles.photos.map((photo, index) => (
+                  <View key={index} style={{ marginRight: 12, borderRadius: 12, overflow: 'hidden' }}>
+                    <Image 
+                      source={{ uri: photo }} 
+                      style={{ width: 120, height: 120, borderRadius: 12 }}
+                      resizeMode="cover"
+                    />
+                  </View>
+                ))}
+              </ScrollView>
+            </View>
+          )}
         </View>
 
         {/* Document Illustration */}
@@ -688,6 +1066,7 @@ const RequestProject = () => {
           </View>
         </View>
       </ScrollView>
+      )}
 
       {/* Bottom Action Buttons */}
       <View style={{
@@ -716,20 +1095,28 @@ const RequestProject = () => {
             Save as Draft
           </Text>
         </TouchableOpacity>
-        <TouchableOpacity style={{
-          flex: 1,
-          backgroundColor: '#16A34A',
-          borderRadius: 12,
-          padding: 16,
-          alignItems: 'center',
-          elevation: 4
-        }}>
-          <Text style={{ color: 'white', fontSize: 16, fontWeight: '700' }}>
-            Submit Request
-          </Text>
+        <TouchableOpacity 
+          style={{
+            flex: 1,
+            backgroundColor: isSubmitting ? '#9CA3AF' : '#16A34A',
+            borderRadius: 12,
+            padding: 16,
+            alignItems: 'center',
+            elevation: 4
+          }}
+          onPress={handleSubmit}
+          disabled={isSubmitting}
+        >
+          {isSubmitting ? (
+            <ActivityIndicator color="white" />
+          ) : (
+            <Text style={{ color: 'white', fontSize: 16, fontWeight: '700' }}>
+              {isEditMode ? 'Update Request' : 'Submit Request'}
+            </Text>
+          )}
         </TouchableOpacity>
       </View>
-    </View>
+    </SafeAreaView>
   );
 };
 

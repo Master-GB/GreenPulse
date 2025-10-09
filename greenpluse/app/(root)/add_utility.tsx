@@ -13,6 +13,10 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { collection, addDoc, serverTimestamp } from 'firebase/firestore';
+import * as ImagePicker from 'expo-image-picker';
+import * as FileSystem from 'expo-file-system';
+import * as ImageManipulator from 'expo-image-manipulator';
+import * as DocumentPicker from 'expo-document-picker';
 import { auth, db } from '../../config/firebaseConfig';
 import { useAuth } from '../../contexts/AuthContext';
 
@@ -37,6 +41,12 @@ const AddUtility = () => {
   const [showErrorModal, setShowErrorModal] = useState(false);
   const [errorMessage, setErrorMessage] = useState('');
   
+  // OCR related state
+  const [showOcrResult, setShowOcrResult] = useState(false);
+  const [ocrResult, setOcrResult] = useState<{accountNo?: string, provider?: string}>({});
+  const [isProcessing, setIsProcessing] = useState(false);
+  const [ocrStatus, setOcrStatus] = useState<{type: 'success' | 'error' | null, message: string}>({ type: null, message: '' });
+  
   // Form errors
   const [errors, setErrors] = useState({
     provider: '',
@@ -45,7 +55,7 @@ const AddUtility = () => {
     address: '',
     autoVerify: ''
   });
-
+  
   // Track user interaction for live validation
   const [touched, setTouched] = useState({
     provider: false,
@@ -140,6 +150,302 @@ const AddUtility = () => {
     setShowErrorModal(true);
   };
 
+  // OCR helpers
+  const parseOcrText = (text: string) => {
+    // Clean up the text for better pattern matching
+    const cleanText = text.replace(/\s+/g, ' ').trim();
+    
+    // Extract account number
+    const accountMatch = cleanText.match(/(?:A\/C\s*No\.?\s*[:#-]?\s*|Account\s*(?:No|Number)\s*[:#-]?\s*)([A-Z0-9\-\/]{8,12})/i) || 
+                       cleanText.match(/AC\s*No\.?\s*[:#-]?\s*([A-Z0-9\-\/]{8,12})/i) || 
+                       cleanText.match(/Account\s*(?:No|Number)\s*[:#-]?\s*([A-Z0-9\-\/]{8,12})/i);
+    
+    // Extract service address (look for common address patterns)
+    let address = '';
+    const addressMatch = cleanText.match(/(?:Service Address|Address|Location|At)[:;\s-]+([A-Za-z0-9,\s.-]+(?:\n|\r\n?|$)){1,5}/i);
+    if (addressMatch) {
+      // Clean up the address
+      address = addressMatch[0]
+        .replace(/(?:Service Address|Address|Location|At)[:;\s-]+/i, '')
+        .replace(/[\n\r]+/g, ', ')
+        .replace(/\s+/g, ' ')
+        .replace(/,\s*,/g, ',')
+        .trim()
+        .replace(/,$/, '');
+    }
+    
+    // Determine provider based on account number length if not found in text
+    let provider = '';
+    const accountNo = accountMatch ? accountMatch[1].trim().replace(/[^0-9]/g, '') : '';
+    
+    // If account number has 10 digits, it's CEB, if 8 digits, it's LECO
+    if (accountNo) {
+      if (accountNo.length === 10) {
+        provider = '(CEB) Ceylon Electricity Board';
+      } else if (accountNo.length === 8) {
+        provider = 'LECO (Lanka Electricity Company)';
+      }
+    }
+    
+    // If provider not determined by account number, try to detect from text
+    if (!provider) {
+      if (cleanText.match(/CEB|Ceylon Electricity Board/i)) {
+        provider = '(CEB) Ceylon Electricity Board';
+      } else if (cleanText.match(/LECO|Lanka Electricity Company/i)) {
+        provider = 'LECO (Lanka Electricity Company)';
+      }
+    }
+    
+    return { 
+      accountNo, 
+      provider,
+      address: address || undefined
+    };
+  };
+
+  const runOcrOnBase64 = async (mime: string, base64: string) => {
+    try {
+      setIsProcessing(true);
+      setOcrStatus({ type: null, message: '' });
+      
+      // Helper to send OCR request with a specific engine
+      const sendOcr = async (engine: 1 | 2) => {
+        const form = new FormData();
+        // Demo key; replace with secure key for production
+        form.append("apikey", "helloworld");
+        form.append("base64Image", `data:${mime || "image/jpeg"};base64,${base64}`);
+        // Tables are not necessary for simple bill detection; enabling may hurt accuracy
+        form.append("isTable", "false");
+        form.append("OCREngine", String(engine));
+        form.append("language", "eng");
+        const res = await fetch("https://api.ocr.space/parse/image", {
+          method: "POST",
+          body: form,
+        });
+        return await res.json();
+      };
+
+      // Try with engine 2 first, then fallback to engine 1
+      let json = await sendOcr(2);
+      let parsedText = json?.ParsedResults?.[0]?.ParsedText as string | undefined;
+
+      if (!parsedText || !parsedText.trim()) {
+        // Retry with a different engine
+        const retryJson = await sendOcr(1);
+        const retryText = retryJson?.ParsedResults?.[0]?.ParsedText as string | undefined;
+        if (retryText && retryText.trim()) {
+          json = retryJson;
+          parsedText = retryText;
+        }
+      }
+
+      if (!parsedText || !parsedText.trim()) {
+        const apiMsg = (json?.ErrorMessage && (Array.isArray(json.ErrorMessage) ? json.ErrorMessage.join("; ") : String(json.ErrorMessage)))
+          || json?.ErrorDetails
+          || (typeof json?.OCRExitCode !== 'undefined' ? `ExitCode: ${json.OCRExitCode}` : undefined);
+        throw new Error(apiMsg || "OCR failed to extract text");
+      }
+
+      const result = parseOcrText(parsedText);
+      setOcrResult(result);
+      
+      // Auto-fill the form with OCR results
+      if (result.accountNo) {
+        setAccountNumber(result.accountNo);
+        validateField('accountNumber', result.accountNo);
+        
+        // Show success message
+        setOcrStatus({ 
+          type: 'success', 
+          message: '✓ Bill details extracted successfully!' 
+        });
+        setShowOcrResult(true);
+      } else {
+        // Show partial success if we got some data but not account number
+        if (result.provider || result.address) {
+          setOcrStatus({ 
+            type: 'success', 
+            message: '✓ Some details extracted. Please verify the information.' 
+          });
+        } else {
+          throw new Error('Could not read bill information. Please ensure the image is clear and try again.');
+        }
+      }
+      
+      if (result.provider) {
+        setSelectedProvider(result.provider);
+        validateField('provider', result.provider);
+      }
+      
+      if (result.address) {
+        setServiceAddress(result.address);
+        validateField('address', result.address);
+      }
+      
+    } catch (error) {
+      // Don't log the error to console in production
+      if (__DEV__) {
+        console.log('OCR process encountered an issue'); // Non-error log for development
+      }
+      
+      setOcrResult({});
+      
+      // Default user-friendly error message
+      let userFriendlyMessage = 'Unable to process the bill. Please try again.';
+      
+      // Map technical errors to user-friendly messages without exposing details
+      if (error instanceof Error) {
+        const errorMessage = error.message.toLowerCase();
+        if (errorMessage.includes('network')) {
+          userFriendlyMessage = 'Network issue. Please check your connection.';
+        } else if (errorMessage.includes('timeout')) {
+          userFriendlyMessage = 'Request took too long. Please try again.';
+        } else if (errorMessage.includes('image') || errorMessage.includes('format')) {
+          userFriendlyMessage = 'Cannot read the bill. Please try with a clearer image.';
+        } else if (errorMessage.includes('size') || errorMessage.includes('large')) {
+          userFriendlyMessage = 'Image is too large. Please try with a smaller file.';
+        }
+      }
+      
+      setOcrStatus({ 
+        type: 'error', 
+        message: `✗ ${userFriendlyMessage}`
+      });
+    } finally {
+      setIsProcessing(false);
+    }
+  };
+
+  const processImageWithOcr = async (imageUri: string) => {
+    try {
+      // Process the image to reduce size and convert to base64
+      const manipulated = await ImageManipulator.manipulateAsync(
+        imageUri,
+        [
+          { resize: { width: 800 } }, // Further reduced size for smaller files
+          { rotate: 0 } // Optional: add rotation if needed
+        ],
+        {
+          compress: 0.5, // More aggressive compression
+          format: ImageManipulator.SaveFormat.JPEG,
+          base64: true
+        }
+      );
+      
+      if (!manipulated.base64) {
+        throw new Error('Failed to process image');
+      }
+
+      // Check the size of the base64 string (rough estimate)
+      const base64Length = manipulated.base64.length;
+      const sizeInMB = (base64Length * (3/4)) / (1024 * 1024); // Convert to MB
+      
+      if (sizeInMB > 1) { // If still too large, try with even lower quality
+        const resized = await ImageManipulator.manipulateAsync(
+          imageUri,
+          [
+            { resize: { width: 600 } },
+            { rotate: 0 }
+          ],
+          {
+            compress: 0.4,
+            format: ImageManipulator.SaveFormat.JPEG,
+            base64: true
+          }
+        );
+        
+        if (resized.base64) {
+          await runOcrOnBase64('image/jpeg', resized.base64);
+          return;
+        }
+      }
+
+      await runOcrOnBase64('image/jpeg', manipulated.base64);
+    } catch (error) {
+      console.error('Image processing error:', error);
+      // Error message is already shown via ocrStatus
+      console.error('Image processing error:', error);
+      setIsProcessing(false);
+    }
+  };
+
+  // Handle taking a photo with camera
+  const handleTakePhoto = async () => {
+    try {
+      setIsProcessing(true);
+      const { status } = await ImagePicker.requestCameraPermissionsAsync();
+      if (status !== 'granted') {
+        Alert.alert('Permission required', 'Camera permission is required to take photos of bills.');
+        return;
+      }
+      
+      // First, capture the image without base64 to get the file
+      const result = await ImagePicker.launchCameraAsync({
+        mediaTypes: ImagePicker.MediaTypeOptions.Images,
+        allowsEditing: false,
+        aspect: [4, 3],
+        quality: 0.7, // Reduced quality for smaller file size
+        base64: false,
+      });
+      
+      if (result.canceled || !result.assets?.[0]?.uri) {
+        setIsProcessing(false);
+        return;
+      }
+      
+      // Process the image to reduce size before OCR
+      await processImageWithOcr(result.assets[0].uri);
+      
+    } catch (error) {
+      // Don't log the error to console in production
+      if (__DEV__) {
+        console.log('Photo capture issue'); // Non-error log for development
+      }
+      setOcrStatus({ 
+        type: 'error',
+        message: '✗ Could not take photo. Please try again.'
+      });
+      setIsProcessing(false);
+    }
+  };
+
+  // Handle picking an image from gallery
+  const handlePickImage = async () => {
+    try {
+      const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+      if (status !== 'granted') {
+        Alert.alert('Permission required', 'Permission to access photos is required to select bill images.');
+        return;
+      }
+      
+      // Use ImagePicker for better type safety and simpler API
+      const result = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ImagePicker.MediaTypeOptions.Images,
+        allowsEditing: false,
+        aspect: [4, 3],
+        quality: 0.8,
+        base64: true,
+      });
+      
+      if (!result.canceled && result.assets?.[0]) {
+        const asset = result.assets[0];
+        if (asset.base64) {
+          await runOcrOnBase64(asset.mimeType || 'image/jpeg', asset.base64);
+        }
+      }
+    } catch (error) {
+      // Don't log the error to console in production
+      if (__DEV__) {
+        console.log('Image selection issue'); // Non-error log for development
+      }
+      setOcrStatus({ 
+        type: 'error',
+        message: '✗ Could not select image. Please try again.'
+      });
+      setIsProcessing(false);
+    }
+  };
+
   // Handle save account
   const handleSaveAccount = async () => {
     if (!validateForm()) {
@@ -211,9 +517,58 @@ const AddUtility = () => {
         {/* Form Section */}
         <View className="mx-5 mt-4">
           <Text className="text-white text-xl font-bold ">Add Account Form</Text>
-          <Text className="text-gray-400 text-sm mb-6">
+          <Text className="text-gray-400 text-sm mb-4">
             Please fill in the details below to save your account.
           </Text>
+
+          {/* OCR Buttons */}
+          <View className="bg-[#1a3333] rounded-2xl p-4 mb-6 border border-[#2a4444]">
+            <Text className="text-white text-base font-semibold mb-2">Quick Fill from Bill</Text>
+            <Text className="text-gray-400 text-sm mb-3">
+              Scan your utility bill to auto-fill the form
+            </Text>
+            
+            <View className="flex-row">
+              <View className="flex-1 pr-1">
+                <TouchableOpacity 
+                  onPress={handleTakePhoto} 
+                  className="bg-[#00ff88] w-full py-3 rounded-xl flex-row items-center justify-center"
+                  disabled={isProcessing}
+                >
+                  <Ionicons name="camera" size={22} color="#000" />
+                  <Text className="text-black font-semibold text-base ml-3">Scan Bill</Text>
+                </TouchableOpacity>
+              </View>
+              
+              <View className="flex-1 pl-1">
+                <TouchableOpacity 
+                  onPress={handlePickImage}
+                  className="bg-[#2a4a3a] w-full py-3 rounded-xl flex-row items-center justify-center border border-[#00ff88]/30"
+                  disabled={isProcessing}
+                >
+                  <Ionicons name="document-attach" size={22} color="#00ff88" />
+                  <Text className="text-[#00ff88] font-medium text-base ml-3">Upload Bill</Text>
+                </TouchableOpacity>
+              </View>
+            </View>
+            
+            <View className="mt-1 min-h-[24px]">
+              {isProcessing ? (
+                <View className="flex-row items-center justify-center">
+                  <ActivityIndicator color="#00ff88" />
+                  <Text className="text-gray-300 ml-2">Processing bill image...</Text>
+                </View>
+              ) : ocrStatus.type ? (
+                <View className={`rounded-lg p-2 ${ocrStatus.type === 'success' ? 'bg-green-900/20 border border-green-800' : 'bg-red-900/20 border border-red-800'}`}>
+                  <Text 
+                    className={`text-center text-sm font-medium ${ocrStatus.type === 'success' ? 'text-green-300' : 'text-red-300'}`}
+                  >
+                    {ocrStatus.message}
+                  </Text>
+                </View>
+              ) : null}
+            </View>
+          </View>
 
           <View className="bg-[#1a3333] rounded-2xl p-5 border border-[#2a4444]">
             {/* Provider Selection */}
@@ -271,33 +626,7 @@ const AddUtility = () => {
               ) : null}
             </View>
 
-            {/* Account Nickname */}
-            <View className="mb-4">
-              <Text className="text-gray-300 text-sm mb-2">
-                Account Nickname <Text className="text-red-500">*</Text>
-              </Text>
-              <TextInput
-                className={`bg-[#2a3a3a] rounded-xl px-4 py-4 text-white ${
-                  errors.nickname ? 'border-2 border-red-500' : ''
-                }`}
-                placeholder="e.g., Home, Office, Villa"
-                placeholderTextColor="#6b7280"
-                value={accountNickname}
-                onChangeText={(text) => {
-                  setAccountNickname(text);
-                  const msg = validateField('nickname', text);
-                  setErrors(prev => ({ ...prev, nickname: msg }));
-                }}
-                onBlur={() => {
-                  setTouched(prev => ({ ...prev, nickname: true }));
-                  const msg = validateField('nickname');
-                  setErrors(prev => ({ ...prev, nickname: msg }));
-                }}
-              />
-              {errors.nickname && touched.nickname ? (
-                <Text className="text-red-500 text-xs mt-1">{errors.nickname}</Text>
-              ) : null}
-            </View>
+            
 
             {/* Service Address */}
             <View className="mb-4">
@@ -327,6 +656,36 @@ const AddUtility = () => {
               />
               {errors.address && touched.address ? (
                 <Text className="text-red-500 text-xs mt-1">{errors.address}</Text>
+              ) : null}
+            </View>
+
+
+
+            {/* Account Nickname */}
+            <View className="mb-4">
+              <Text className="text-gray-300 text-sm mb-2">
+                Account Nickname <Text className="text-red-500">*</Text>
+              </Text>
+              <TextInput
+                className={`bg-[#2a3a3a] rounded-xl px-4 py-4 text-white ${
+                  errors.nickname ? 'border-2 border-red-500' : ''
+                }`}
+                placeholder="e.g., Home, Office, Villa"
+                placeholderTextColor="#6b7280"
+                value={accountNickname}
+                onChangeText={(text) => {
+                  setAccountNickname(text);
+                  const msg = validateField('nickname', text);
+                  setErrors(prev => ({ ...prev, nickname: msg }));
+                }}
+                onBlur={() => {
+                  setTouched(prev => ({ ...prev, nickname: true }));
+                  const msg = validateField('nickname');
+                  setErrors(prev => ({ ...prev, nickname: msg }));
+                }}
+              />
+              {errors.nickname && touched.nickname ? (
+                <Text className="text-red-500 text-xs mt-1">{errors.nickname}</Text>
               ) : null}
             </View>
 
@@ -371,7 +730,7 @@ const AddUtility = () => {
         {/* Save Button */}
         <View className="mx-5 mt-6 mb-8">
           <TouchableOpacity
-            className={`rounded-2xl py-4 ${isLoading ? 'bg-[#2a4444]' : !isFormValid() ? 'bg-[#00ff88] opacity-60' : 'bg-[#00ff88]'}`}
+            className={`rounded-2xl py-4 ${isLoading ? 'bg-[#00ff88] opacity-60' : !isFormValid() ? 'bg-[#00ff88] opacity-60' : 'bg-[#00ff88]'}`}
             onPress={handleSaveAccount}
             disabled={!isFormValid() || isLoading}
           >
@@ -440,7 +799,7 @@ const AddUtility = () => {
         statusBarTranslucent
         onRequestClose={handleSuccessContinue}
       >
-        <View className="flex-1 bg-[#122119] opacity-90 justify-center items-center p-5">
+        <View className="flex-1 bg-[#122119] opacity-90 justify-center items-center p-5 ">
           <View className="bg-[#1a3333] rounded-2xl w-full max-w-sm overflow-hidden border border-[#00ff88]/30">
             {/* Header */}
             <View className="items-center p-6">

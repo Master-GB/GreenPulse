@@ -29,8 +29,14 @@ const ProjectsSetting = () => {
       subtitle: 'View your contribution history',
       gradient: 'from-blue-500 to-cyan-600',
       bgColor: '#3B82F6',
-      onPress: () => console.log('My Donations')
-    },
+      onPress: () => {
+        try {
+          router.push('/MyDonatedList' as any);
+        } catch (error) {
+          console.error('Navigation error:', error);
+        }
+      }
+    }, 
     {
       id: 3,
       icon: MapPin,
@@ -56,7 +62,13 @@ const ProjectsSetting = () => {
       subtitle: 'Manage your active projects',
       gradient: 'from-teal-500 to-green-600',
       bgColor: '#14B8A6',
-      onPress: () => console.log('My Projects')
+      onPress: () => {
+        try {
+          router.push('/MyRequestProject' as any);
+        } catch (error) {
+          console.error('Navigation error:', error);
+        }
+      }
     },
     {
       id: 6,
@@ -73,47 +85,7 @@ const ProjectsSetting = () => {
     <>
       <StatusBar barStyle="light-content" backgroundColor="#0a0a0a" />
       <View style={{ flex: 1, backgroundColor: '#0a0a0a' }}>
-        {/* Animated Header with Gradient Effect */}
-        <View style={{ 
-          paddingHorizontal: 20, 
-          paddingTop: 56, 
-          paddingBottom: 24,
-          backgroundColor: '#0a0a0a'
-        }}>
-          <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 12 }}>
-            <TouchableOpacity 
-              style={{ 
-                marginRight: 16,
-                padding: 8,
-                backgroundColor: '#262626',
-                borderRadius: 12,
-                borderWidth: 1,
-                borderColor: '#404040'
-              }}
-              onPress={() => router.back()}
-            >
-              <ArrowLeft size={24} color="white" />
-            </TouchableOpacity>
-            <View style={{ flex: 1 }}>
-              <Text style={{ 
-                color: 'white', 
-                fontSize: 28, 
-                fontWeight: '800',
-                letterSpacing: -0.5
-              }}>
-                Projects Setting
-              </Text>
-              <Text style={{ 
-                color: '#a3a3a3', 
-                fontSize: 14, 
-                marginTop: 2,
-                fontWeight: '500'
-              }}>
-                Manage your green energy journey
-              </Text>
-            </View>
-          </View>
-        </View>
+       
 
         {/* Enhanced Menu Items */}
         <ScrollView 

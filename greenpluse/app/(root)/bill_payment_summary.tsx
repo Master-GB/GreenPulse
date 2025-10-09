@@ -8,6 +8,7 @@ import {
   Modal,
   StatusBar,
   TextInput,
+  Share 
 } from "react-native";
 import React, { useState, useEffect, useCallback } from "react";
 import Slider from "@react-native-community/slider";
@@ -18,7 +19,9 @@ import * as DocumentPicker from "expo-document-picker";
 // Using legacy API to avoid deprecation warnings
 import * as FileSystem from "expo-file-system/legacy";
 import * as ImageManipulator from "expo-image-manipulator";
-import { Linking, ImageBackground } from 'react-native';
+import * as Sharing from 'expo-sharing';
+import { Linking, ImageBackground, Platform } from 'react-native';
+import * as Print from 'expo-print';
 // Firebase
 import { collection, addDoc, serverTimestamp } from 'firebase/firestore';
 import { db } from '../../config/firebaseConfig';
@@ -47,7 +50,6 @@ const BillPayment = () => {
  
 
   
- 
   const [credits, setCredits] = useState(params.credits ? parseInt(params.credits, 10) : 15);
   const [creditsToUse, setCreditsToUse] = useState(0);
   const [isLoading, setIsLoading] = useState(false);
@@ -55,10 +57,303 @@ const BillPayment = () => {
   const [showSuccessModal, setShowSuccessModal] = useState(false);
   const [showCreditError, setShowCreditError] = useState(false);
   const [showLearnMore, setShowLearnMore] = useState(false);
+  const [showReceipt, setShowReceipt] = useState(false);
   const [showOcrResult, setShowOcrResult] = useState(false);
   const [ocrResult, setOcrResult] = useState<{accountNo?: string, amount?: number, meterReading?: string}>({});
 
-   const [billData, setBillData] = useState<BillData>({
+  // Helper to normalize account numbers for comparison
+  const normalizeAccount = (v?: string) => (v || '').replace(/[^A-Za-z0-9]/g, '').toUpperCase();
+  // Only validate when OCR has extracted an account number
+  const showAccountMismatch = !!(
+    ocrResult.accountNo && params.accountNumber &&
+    normalizeAccount(ocrResult.accountNo) !== normalizeAccount(String(params.accountNumber))
+  );
+
+  const ReceiptModal = () => {
+    const remainingAmount = billData.currentBill - amountToPay;
+    const transactionId = Math.random().toString(36).substring(2, 10).toUpperCase();
+    const receiptDate = new Date().toLocaleDateString('en-US', {
+      year: 'numeric',
+      month: 'long',
+      day: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit'
+    });
+
+    const handleShareReceipt = async () => {
+      try {
+        const html = `<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>GreenPulse Receipt ${transactionId}</title>
+  <style>
+    body{font-family: Arial, sans-serif; background:#0e1713; color:#fff; padding:20px}
+    .card{background:#1a1a1a; border-radius:16px; padding:20px; max-width:420px; margin:0 auto}
+    .title{font-size:22px; font-weight:700; margin:0 0 6px}
+    .date{color:#cbd5e1; font-size:12px; margin-bottom:14px}
+    .row{display:flex; justify-content:space-between; margin:8px 0}
+    .muted{color:#9ca3af}
+    .accent{color:#00ff88}
+    .divider{height:1px; background:#333; margin:12px 0}
+    .total{font-size:18px; font-weight:700}
+    .badge{background:#1a3a2a; color:#00ff88; padding:2px 6px; border-radius:8px; font-size:11px}
+    .footer{color:#86efac; text-align:center; font-size:12px; margin-top:10px}
+  </style>
+  </head>
+  <body>
+    <div class="card">
+      <div class="title">Payment Receipt</div>
+      <div class="date">${receiptDate}</div>
+      <div class="row"><div class="muted">Transaction ID</div><div>${transactionId}</div></div>
+      <div class="divider"></div>
+      <div class="row"><div class="muted">Account</div><div>${params.accountNickname || 'N/A'}</div></div>
+      <div class="row"><div class="muted">Account No</div><div>${params.accountNumber || ''}</div></div>
+      <div class="row"><div class="muted">Provider</div><div>${params.provider || ''}</div></div>
+      <div class="divider"></div>
+      <div class="row"><div class="muted">Bill Amount</div><div>Rs.${billData.currentBill.toFixed(2)}</div></div>
+      <div class="row"><div class="muted">Credits Used</div><div class="accent">-${creditsToUse} (Rs.${amountToPay.toFixed(2)})</div></div>
+      <div class="row"><div class="muted">Remaining Amount</div><div>Rs.${remainingAmount.toFixed(2)}</div></div>
+      <div class="divider"></div>
+      <div class="row"><div class="total">Total Paid</div><div class="total">Rs.${amountToPay.toFixed(2)}</div></div>
+      <div class="row" style="margin-top:10px"><div class="muted">Payment Status</div><div class="badge">Completed</div></div>
+      <div class="footer">Thank you for using GreenPulse!</div>
+    </div>
+  </body>
+</html>`;
+
+        // Generate PDF and ensure .pdf extension
+        const pdfFileName = `GreenPulse_Receipt_${transactionId}.pdf`;
+        const { uri: pdfUri } = await Print.printToFileAsync({ html });
+        const finalPdfUri = `${FileSystem.cacheDirectory}${pdfFileName}`;
+        try {
+          await FileSystem.copyAsync({ from: pdfUri, to: finalPdfUri });
+        } catch {}
+
+        const shareUri = (await FileSystem.getInfoAsync(finalPdfUri)).exists ? finalPdfUri : pdfUri;
+
+        if (await Sharing.isAvailableAsync()) {
+          await Sharing.shareAsync(shareUri, {
+            mimeType: 'application/pdf',
+            UTI: 'com.adobe.pdf',
+            dialogTitle: 'Share Receipt PDF',
+          });
+        } else {
+          Alert.alert('Share Unavailable', 'Sharing is not available on this device.');
+        }
+      } catch (error) {
+        console.error('Error sharing receipt:', error);
+        Alert.alert('Share Failed', 'Could not share the receipt. Please try again.');
+      }
+    };
+
+    const handleDownloadReceipt = async () => {
+      try {
+        const html = `<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>GreenPulse Receipt ${transactionId}</title>
+  <style>
+    body{font-family: Arial, sans-serif; background:#0e1713; color:#fff; padding:20px}
+    .card{background:#1a1a1a; border-radius:16px; padding:20px; max-width:420px; margin:0 auto}
+    .title{font-size:22px; font-weight:700; margin:0 0 6px}
+    .date{color:#cbd5e1; font-size:12px; margin-bottom:14px}
+    .row{display:flex; justify-content:space-between; margin:8px 0}
+    .muted{color:#9ca3af}
+    .accent{color:#00ff88}
+    .divider{height:1px; background:#333; margin:12px 0}
+    .total{font-size:18px; font-weight:700}
+    .badge{background:#1a3a2a; color:#00ff88; padding:2px 6px; border-radius:8px; font-size:11px}
+    .footer{color:#86efac; text-align:center; font-size:12px; margin-top:10px}
+  </style>
+  </head>
+  <body>
+    <div class="card">
+      <div class="title">Payment Receipt</div>
+      <div class="date">${receiptDate}</div>
+      <div class="row"><div class="muted">Transaction ID</div><div>${transactionId}</div></div>
+      <div class="divider"></div>
+      <div class="row"><div class="muted">Account</div><div>${params.accountNickname || 'N/A'}</div></div>
+      <div class="row"><div class="muted">Account No</div><div>${params.accountNumber || ''}</div></div>
+      <div class="row"><div class="muted">Provider</div><div>${params.provider || ''}</div></div>
+      <div class="divider"></div>
+      <div class="row"><div class="muted">Bill Amount</div><div>Rs.${billData.currentBill.toFixed(2)}</div></div>
+      <div class="row"><div class="muted">Credits Used</div><div class="accent">-${creditsToUse} (Rs.${amountToPay.toFixed(2)})</div></div>
+      <div class="row"><div class="muted">Remaining Amount</div><div>Rs.${(billData.currentBill - amountToPay).toFixed(2)}</div></div>
+      <div class="divider"></div>
+      <div class="row"><div class="total">Total Paid</div><div class="total">Rs.${amountToPay.toFixed(2)}</div></div>
+      <div class="row" style="margin-top:10px"><div class="muted">Payment Status</div><div class="badge">Completed</div></div>
+      <div class="footer">Thank you for using GreenPulse!</div>
+    </div>
+  </body>
+</html>`;
+
+        // Generate PDF from HTML
+        const pdfFileName = `GreenPulse_Receipt_${transactionId}.pdf`;
+        const { uri: pdfUri } = await Print.printToFileAsync({ html });
+        // Ensure the file has a .pdf extension for correct mime handling on share dialogs
+        const finalPdfUri = `${FileSystem.cacheDirectory}${pdfFileName}`;
+        try {
+          // Overwrite if exists
+          await FileSystem.copyAsync({ from: pdfUri, to: finalPdfUri });
+        } catch (copyErr) {
+          // If copy fails, fall back to original uri
+          console.warn('Copy to .pdf path failed, using original PDF uri', copyErr);
+        }
+
+        if (Platform.OS === 'android') {
+          try {
+            const permissions = await FileSystem.StorageAccessFramework.requestDirectoryPermissionsAsync();
+            if (permissions.granted && permissions.directoryUri) {
+              const destUri = await FileSystem.StorageAccessFramework.createFileAsync(
+                permissions.directoryUri,
+                pdfFileName,
+                'application/pdf'
+              );
+              // Read the PDF (with .pdf extension path if available) as base64 and write via SAF
+              const sourceUri = (await FileSystem.getInfoAsync(finalPdfUri)).exists ? finalPdfUri : pdfUri;
+              const pdfBase64 = await FileSystem.readAsStringAsync(sourceUri, { encoding: FileSystem.EncodingType.Base64 });
+              await FileSystem.StorageAccessFramework.writeAsStringAsync(destUri, pdfBase64, { encoding: FileSystem.EncodingType.Base64 });
+              Alert.alert('Receipt Downloaded', 'PDF saved to selected folder.', [{ text: 'OK' }]);
+            } else {
+              // Fallback to share dialog if user cancelled
+              if (await Sharing.isAvailableAsync()) {
+                const shareUri = (await FileSystem.getInfoAsync(finalPdfUri)).exists ? finalPdfUri : pdfUri;
+                await Sharing.shareAsync(shareUri, { mimeType: 'application/pdf', UTI: 'com.adobe.pdf', dialogTitle: 'Save or Share Receipt' });
+              }
+            }
+          } catch (e) {
+            // On any SAF error, fallback to share
+            if (await Sharing.isAvailableAsync()) {
+              const shareUri = (await FileSystem.getInfoAsync(finalPdfUri)).exists ? finalPdfUri : pdfUri;
+              await Sharing.shareAsync(shareUri, { mimeType: 'application/pdf', UTI: 'com.adobe.pdf', dialogTitle: 'Save or Share Receipt' });
+            }
+          }
+        } else {
+          if (await Sharing.isAvailableAsync()) {
+            const shareUri = (await FileSystem.getInfoAsync(finalPdfUri)).exists ? finalPdfUri : pdfUri;
+            await Sharing.shareAsync(shareUri, { mimeType: 'application/pdf', UTI: 'com.adobe.pdf', dialogTitle: 'Save or Share Receipt' });
+          } else {
+            const savedUri = (await FileSystem.getInfoAsync(finalPdfUri)).exists ? finalPdfUri : pdfUri;
+            Alert.alert('Receipt Ready', `PDF saved at: ${savedUri}`);
+          }
+        }
+      } catch (error) {
+        console.error('Error downloading receipt:', error);
+        Alert.alert('Download Failed', 'Could not save the receipt. Please try again.');
+      }
+    };
+
+    return (
+      <Modal
+        visible={showReceipt}
+        transparent={true}
+        animationType="fade"
+        statusBarTranslucent
+        onRequestClose={() => setShowReceipt(false)}
+      >
+        <View className="flex-1 bg-[#122119] opacity-90 justify-center items-center p-5">
+          <View className="bg-[#1a1a1a] rounded-2xl p-6 w-full max-w-sm">
+            <ScrollView className="max-h-[80vh]">
+              <View className="items-center mb-6">
+                <View className="bg-[#00ff88] rounded-full p-3 mb-4">
+                  <Ionicons name="receipt" size={40} color="#122119" />
+                </View>
+                <Text className="text-white text-2xl font-bold mb-2">Payment Receipt</Text>
+                <Text className="text-gray-300 text-sm mb-4">
+                  {receiptDate}
+                </Text>
+                
+                <View className="w-full bg-[#2a2a2a] rounded-xl p-4 mb-4">
+                  <View className="flex-row justify-between mb-3">
+                    <Text className="text-gray-400">Transaction ID</Text>
+                    <Text className="text-white">{transactionId}</Text>
+                  </View>
+                  <View className="h-px bg-[#3a3a3a] my-2" />
+                  
+                  <View className="mb-2">
+                    <Text className="text-gray-400 text-sm mb-1">Account Details</Text>
+                    <Text className="text-white">{params.accountNickname || 'N/A'}</Text>
+                    <Text className="text-gray-300 text-xs">{params.accountNumber || ''}</Text>
+                    <Text className="text-gray-300 text-xs">{params.provider || ''}</Text>
+                  </View>
+                  
+                  <View className="h-px bg-[#3a3a3a] my-3" />
+                  
+                  <View className="space-y-2">
+                    <View className="flex-row justify-between">
+                      <Text className="text-gray-400">Bill Amount</Text>
+                      <Text className="text-white">Rs.{billData.currentBill.toFixed(2)}</Text>
+                    </View>
+                    <View className="flex-row justify-between">
+                      <Text className="text-gray-400">Credits Used</Text>
+                      <Text className="text-[#00ff88]">-{creditsToUse} (Rs.{amountToPay.toFixed(2)})</Text>
+                    </View>
+                    <View className="flex-row justify-between">
+                      <Text className="text-gray-400">Remaining Amount</Text>
+                      <Text className="text-white">Rs.{remainingAmount.toFixed(2)}</Text>
+                    </View>
+                    
+                    <View className="h-px bg-[#3a3a3a] my-2" />
+                    
+                    <View className="flex-row justify-between items-center">
+                      <Text className="text-white text-lg font-bold">Total Paid</Text>
+                      <Text className="text-white text-xl font-bold">
+                        Rs.{amountToPay.toFixed(2)}
+                      </Text>
+                    </View>
+                  </View>
+                  
+                  <View className="flex-row justify-between mt-4">
+                    <Text className="text-gray-400">Payment Status</Text>
+                    <View className="bg-[#1a3a2a] px-2 py-1 rounded">
+                      <Text className="text-[#00ff88] text-xs">Completed</Text>
+                    </View>
+                  </View>
+                </View>
+                
+                <View className="flex-row justify-between w-full gap-5 mb-4">
+                  <TouchableOpacity
+                    className="flex-1 bg-[#2a2a2a] p-3 rounded-lg items-center flex-row justify-center space-x-2"
+                    onPress={handleDownloadReceipt}
+                  >
+                    <Ionicons name="download-outline" size={20} color="#00ff88" />
+                    <Text className="text-white">Download</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    className="flex-1 bg-[#00ff88] p-3 rounded-lg items-center flex-row justify-center space-x-2"
+                    onPress={handleShareReceipt}
+                  >
+                    <Ionicons name="share-social-outline" size={20} color="#000" />
+                    <Text className="text-black font-semibold">Share</Text>
+                  </TouchableOpacity>
+                </View>
+                
+                <Text className="text-green-400 text-center text-sm mb-2">
+                  Thank you for using GreenPulse! Your payment was successful.
+                </Text>
+                <Text className="text-gray-400 text-center text-xs">
+                  Transaction ID: {transactionId}
+                </Text>
+              </View>
+            </ScrollView>
+
+            <TouchableOpacity
+              className="bg-[#333] py-3 rounded-xl items-center mt-2"
+              onPress={() => setShowReceipt(false)}
+            >
+              <Text className="text-white font-semibold">Close</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
+    );
+  };
+
+  const [billData, setBillData] = useState<BillData>({
     currentBill: 0,
     creditAvailable: params.credits ? parseFloat(params.credits) * 23.38 : 1100.0,
     creditConversionRate: 91,
@@ -285,6 +580,17 @@ const BillPayment = () => {
       const docRef = await addDoc(collection(db, 'billPayments'), billData);
       console.log('Document written with ID: ', docRef.id);
       
+      // Reset all form states
+      setCurrentBillInput("");
+      setCreditsToUse(0);
+      setOcrResult({});
+      setShowOcrResult(false);
+      setCredits(remainingCredits);
+      // Reset bill data to clear remaining amount
+      setBillData(prev => ({
+        ...prev,
+        currentBill: 0
+      }));
       // Show success message
       setShowPaymentConfirmation(false);
       setShowSuccessModal(true);
@@ -367,7 +673,7 @@ const BillPayment = () => {
               className="w-full h-full absolute top-0 left-0"
               resizeMode="cover"
             >
-              <View className="w-full h-full bg-black/50" />
+              <View className="w-full h-full bg-black/70" />
             </ImageBackground>
             
             <View className="p-5 relative">
@@ -376,10 +682,14 @@ const BillPayment = () => {
                 <Text className="text-[#00ff88] text-6xl font-bold">CEB</Text>
               </View>
 
+              <View className="absolute right-0 top-20 opacity-10">
+                <Text className="text-[#00ff88] text-6xl font-bold">LECO</Text>
+              </View>
+
               <View className="flex-row justify-between items-start mb-4">
               <View className="flex-1">
                 <Text className="text-white font-medium text-sm mb-1">Current Bill</Text>
-                <View className="bg-[#2a3a3a] opacity-90 rounded-xl px-5  flex-row items-center">
+                <View className="bg-[#2a3a3a]  rounded-xl px-5  flex-row items-center">
                   <Text className="text-white text-base mr-2">Rs.</Text>
                   <TextInput
                     className="text-white text-base flex-1"
@@ -401,16 +711,21 @@ const BillPayment = () => {
             </View>
 
             {ocrResult.accountNo && (
-              <View className="mb-4 opacity-80 ">
+              <View className="mb-4 opacity-65 ">
                 <Text className="text-white font-medium text-sm mb-1">Account Number</Text>
                 <View className="bg-[#2a3a3a]  rounded-xl px-5 py-3">
                   <Text className="text-white text-base">{ocrResult.accountNo}</Text>
                 </View>
+                {showAccountMismatch && (
+                  <Text className="text-[#e71111] text-[12px] mt-1">
+                    The scanned account number does not match the selected account.
+                  </Text>
+                )}
               </View>
             )}
 
             {ocrResult.meterReading && (
-              <View className="mb-4 opacity-80">
+              <View className="mb-4 opacity-65">
                 <Text className="text-white font-medium text-sm mb-1">Units Used</Text>
                 <View className="bg-[#2a3a3a] rounded-xl px-5 py-3">
                   <Text className="text-white text-base">
@@ -618,10 +933,10 @@ const BillPayment = () => {
       {/* Pay Button */}
             <TouchableOpacity
             className={`mt-5 mb-5 mx-12 rounded-3xl py-4 ${
-              isLoading ? "bg-[#00ff88a1]" : !currentBillInput || parseFloat(currentBillInput) <= 0 ? "bg-[#00ff8899]" : "bg-[#00ff88]"
+              isLoading || showAccountMismatch ? "bg-[#00ff88a1]" : !currentBillInput || parseFloat(currentBillInput) <= 0 ? "bg-[#00ff8899]" : "bg-[#00ff88]"
             }`}
             onPress={handlePayNow}
-            disabled={isLoading || !currentBillInput || parseFloat(currentBillInput) <= 0}
+            disabled={isLoading || !currentBillInput || parseFloat(currentBillInput) <= 0 || showAccountMismatch}
           >
             {isLoading ? (
               <ActivityIndicator color="#fff" />
@@ -687,9 +1002,9 @@ const BillPayment = () => {
               </TouchableOpacity>
 
               <TouchableOpacity
-                className="flex-1 bg-[#00ff88] rounded-xl py-3 items-center justify-center"
-                onPress={handleConfirmPayment}
-                disabled={isLoading}
+                className={`py-4 px-6 rounded-xl ${isLoading || showAccountMismatch ? 'bg-[#00ff88]/50' : 'bg-[#00ff88]'}`}
+                onPress={handlePayNow}
+                disabled={isLoading || showAccountMismatch}
               >
                 {isLoading ? (
                   <ActivityIndicator color="#000" />
@@ -754,8 +1069,8 @@ const BillPayment = () => {
                 <TouchableOpacity
                   className="bg-[#8DB890] opacity-50 py-4 rounded-xl items-center"
                   onPress={() => {
-                    // TODO: Implement view receipt functionality
-                    console.log("View Receipt");
+                    setShowSuccessModal(false);
+                    setShowReceipt(true);
                   }}
                 >
                   <Text className="text-[#1CFF4E] font-semibold">
@@ -813,6 +1128,9 @@ const BillPayment = () => {
           </View>
         </View>
       </Modal>
+
+      {/* Receipt Modal */}
+      <ReceiptModal />
 
       {/* Learn About Credits Modal */}
       <Modal
