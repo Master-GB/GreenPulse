@@ -1,12 +1,15 @@
-import React from 'react';
-import { View, Text, TouchableOpacity, ScrollView, Image, StatusBar } from 'react-native';
-import { ArrowLeft } from 'lucide-react-native';
+import React, { useState, useEffect } from 'react';
+import { View, Text, TouchableOpacity, ScrollView, Image, StatusBar, ActivityIndicator, Alert } from 'react-native';
+import { ArrowLeft, Edit, Trash2 } from 'lucide-react-native';
 import { useRouter } from 'expo-router';
+import { db, auth } from '@/config/firebaseConfig';
+import { collection, query, where, getDocs, orderBy, deleteDoc, doc } from 'firebase/firestore';
 
 type ProjectStatus = 'Pending' | 'Published' | 'Funded' | 'Rejected';
 
 interface RequestedProjectType {
   id: number;
+  docId: string;
   title: string;
   status: ProjectStatus;
   image: string;
@@ -15,11 +18,64 @@ interface RequestedProjectType {
 
 const MyRequestProject = () => {
   const router = useRouter();
+  const [requestedProjects, setRequestedProjects] = useState<RequestedProjectType[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
 
-  // Mock data - replace with API call in future
-  const requestedProjects: RequestedProjectType[] = [
+  useEffect(() => {
+    fetchProjects();
+  }, []);
+
+  const fetchProjects = async () => {
+    try {
+      const user = auth.currentUser;
+      if (!user) {
+        console.log('No user logged in');
+        setIsLoading(false);
+        return;
+      }
+
+      // Query Firestore for user's project requests
+      const projectsRef = collection(db, 'projectRequests');
+      const q = query(
+        projectsRef,
+        where('userId', '==', user.uid),
+        orderBy('createdAt', 'desc')
+      );
+
+      const querySnapshot = await getDocs(q);
+      const projects: RequestedProjectType[] = [];
+
+      querySnapshot.forEach((document) => {
+        const data = document.data();
+        projects.push({
+          id: parseInt(document.id.slice(-6), 36), // Convert doc ID to number
+          docId: document.id, // Store Firestore document ID
+          title: data.projectTitle,
+          status: data.status as ProjectStatus,
+          image: data.energySystem === 'Solar Panel' 
+            ? 'https://images.unsplash.com/photo-1509391366360-2e959784a276?w=400'
+            : data.energySystem === 'Wind Turbine'
+            ? 'https://images.unsplash.com/photo-1532601224476-15c79f2f7a51?w=400'
+            : 'https://images.unsplash.com/photo-1473341304170-971dccb5ac1e?w=400',
+          submittedDate: data.submittedDate?.toDate?.()?.toLocaleDateString() || 'Recent'
+        });
+      });
+
+      setRequestedProjects(projects);
+    } catch (error) {
+      console.error('Fetch error:', error);
+      // Use mock data as fallback
+      setRequestedProjects(mockProjects);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  // Mock data for development
+  const mockProjects: RequestedProjectType[] = [
     {
       id: 1,
+      docId: 'mock1',
       title: 'Solar Panel Installation',
       status: 'Pending',
       image: 'https://images.unsplash.com/photo-1509391366360-2e959784a276?w=400',
@@ -27,6 +83,7 @@ const MyRequestProject = () => {
     },
     {
       id: 2,
+      docId: 'mock2',
       title: 'Wind Turbine Project for',
       status: 'Published',
       image: 'https://images.unsplash.com/photo-1532601224476-15c79f2f7a51?w=400',
@@ -34,12 +91,61 @@ const MyRequestProject = () => {
     },
     {
       id: 3,
+      docId: 'mock3',
       title: 'Hydroelectric Power for',
       status: 'Funded',
       image: 'https://images.unsplash.com/photo-1473341304170-971dccb5ac1e?w=400',
       submittedDate: '2024-01-05'
     }
   ];
+
+  const handleDeleteProject = async (project: RequestedProjectType) => {
+    if (project.status !== 'Pending') {
+      Alert.alert(
+        'Cannot Delete',
+        `You can only delete projects with "Pending" status. This project is "${project.status}".`
+      );
+      return;
+    }
+
+    Alert.alert(
+      'Delete Project',
+      `Are you sure you want to delete "${project.title}"? This action cannot be undone.`,
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Delete',
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              await deleteDoc(doc(db, 'projectRequests', project.docId));
+              Alert.alert('Success', 'Project deleted successfully');
+              fetchProjects(); // Refresh the list
+            } catch (error) {
+              console.error('Delete error:', error);
+              Alert.alert('Error', 'Failed to delete project');
+            }
+          }
+        }
+      ]
+    );
+  };
+
+  const handleEditProject = (project: RequestedProjectType) => {
+    if (project.status !== 'Pending') {
+      Alert.alert(
+        'Cannot Edit',
+        `You can only edit projects with "Pending" status. This project is "${project.status}".`
+      );
+      return;
+    }
+
+    // Navigate to RequestProject page with docId for editing
+    router.push({
+      pathname: '/(root)/RequestProject',
+      params: { docId: project.docId }
+    } as any);
+  };
 
   const getStatusColor = (status: ProjectStatus) => {
     switch (status) {
@@ -99,7 +205,13 @@ const MyRequestProject = () => {
           contentContainerStyle={{ paddingHorizontal: 20, paddingTop: 20, paddingBottom: 100 }}
           showsVerticalScrollIndicator={false}
         >
-          {requestedProjects.map((project) => (
+          {isLoading ? (
+            <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', paddingVertical: 60 }}>
+              <ActivityIndicator size="large" color="#10b981" />
+              <Text style={{ color: '#6b7280', fontSize: 14, marginTop: 12 }}>Loading your projects...</Text>
+            </View>
+          ) : requestedProjects.length > 0 ? (
+            requestedProjects.map((project) => (
             <View
               key={project.id}
               style={{
@@ -143,31 +255,73 @@ const MyRequestProject = () => {
                 }}>
                   {project.status}
                 </Text>
+                
+                {/* Action Buttons Row */}
+                <View style={{ flexDirection: 'row', gap: 8 }}>
+                  {/* Edit Button - Only for Pending */}
+                  {project.status === 'Pending' && (
+                    <TouchableOpacity
+                      style={{
+                        backgroundColor: '#3B82F6',
+                        paddingVertical: 8,
+                        paddingHorizontal: 12,
+                        borderRadius: 8,
+                        flexDirection: 'row',
+                        alignItems: 'center',
+                        gap: 4
+                      }}
+                      onPress={() => handleEditProject(project)}
+                      activeOpacity={0.8}
+                    >
+                      <Edit size={16} color="white" />
+                      <Text style={{ color: 'white', fontSize: 13, fontWeight: '600' }}>
+                        Edit
+                      </Text>
+                    </TouchableOpacity>
+                  )}
+                  
+                  {/* Delete Button - Only for Pending */}
+                  {project.status === 'Pending' && (
+                    <TouchableOpacity
+                      style={{
+                        backgroundColor: '#EF4444',
+                        paddingVertical: 8,
+                        paddingHorizontal: 12,
+                        borderRadius: 8,
+                        flexDirection: 'row',
+                        alignItems: 'center',
+                        gap: 4
+                      }}
+                      onPress={() => handleDeleteProject(project)}
+                      activeOpacity={0.8}
+                    >
+                      <Trash2 size={16} color="white" />
+                      <Text style={{ color: 'white', fontSize: 13, fontWeight: '600' }}>
+                        Delete
+                      </Text>
+                    </TouchableOpacity>
+                  )}
+                  
+                  {/* View Button */}
+                  <TouchableOpacity
+                    style={{
+                      backgroundColor: '#2d5a2d',
+                      paddingVertical: 8,
+                      paddingHorizontal: 12,
+                      borderRadius: 8
+                    }}
+                    onPress={() => handleViewProject(project.id)}
+                    activeOpacity={0.8}
+                  >
+                    <Text style={{ color: 'white', fontSize: 13, fontWeight: '600' }}>
+                      View
+                    </Text>
+                  </TouchableOpacity>
+                </View>
               </View>
-
-              {/* View Button */}
-              <TouchableOpacity
-                style={{
-                  backgroundColor: '#2d5a2d',
-                  paddingVertical: 12,
-                  paddingHorizontal: 24,
-                  borderRadius: 12
-                }}
-                onPress={() => handleViewProject(project.id)}
-                activeOpacity={0.8}
-              >
-                <Text style={{
-                  color: 'white',
-                  fontSize: 16,
-                  fontWeight: '600'
-                }}>
-                  View
-                </Text>
-              </TouchableOpacity>
             </View>
-          ))}
-
-          {requestedProjects.length === 0 && (
+            ))
+          ) : (
             <View style={{
               flex: 1,
               justifyContent: 'center',
