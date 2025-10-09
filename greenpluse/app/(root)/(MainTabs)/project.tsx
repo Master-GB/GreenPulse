@@ -1,10 +1,14 @@
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { View, Text, TextInput, ScrollView, TouchableOpacity, Image, StatusBar } from 'react-native';
 import React, { useState } from 'react';
 import { useRouter } from 'expo-router';
+import {
+  ArrowLeft,
+} from 'lucide-react-native';
+import { icons } from '@/constants/icons';
 
 type ProjectStatus = 'Published' | 'Funded' | 'In Progress' | 'Completed';
 type FilterCategory = 'All' | 'Solar' | 'Wind' | 'Hydro';
-
 interface ProjectType {
   id: number;
   status: ProjectStatus;
@@ -121,23 +125,25 @@ const Project = () => {
   };
 
   return (
-    <>
-      <StatusBar barStyle="light-content" backgroundColor="#122119" />
-      <View className="flex-1 bg-[#122119]">
-        {/* Header */}
-        <View className="flex-row items-center justify-between px-5 py-4 pt-12">
-          <TouchableOpacity className="p-2" onPress={() => router.back()}>
-            <Text className="text-white text-2xl">←</Text>
-          </TouchableOpacity>
-          <Text className="text-white text-2xl font-bold">Explore Projects</Text>
-          <TouchableOpacity className="p-2" onPress={() => router.push('/(root)/ProjectSetting' as any)}>
-            <Text className="text-white text-2xl">⚙</Text>
-          </TouchableOpacity>
-        </View>
+    <SafeAreaView className="flex-1 bg-[#122119]">
+      <StatusBar barStyle="light-content" />
 
-        {/* Search Bar */}
-        <View className="px-5 mt-8 flex-row gap-3">
-          <View className="flex-1 bg-neutral-700 rounded-xl px-4 py-3 flex-row items-center gap-3">
+      {/* Header */}
+      <View className="flex-row justify-between items-center px-5 py-1">
+        <TouchableOpacity>
+          <ArrowLeft size={28} color="white" />
+        </TouchableOpacity>
+        <Text className="text-white text-2xl font-bold ml-8">Projects</Text>
+        <TouchableOpacity className='bg-[#2a3e3e] rounded-full px-3 py-2 flex-row items-center gap-2'>
+            <Image source={icons.coinH}  className="size-5 mb-1" />
+            <Text className="text-white font-semibold">120</Text>
+            <Text className="text-gray-400">/5</Text>
+          </TouchableOpacity>
+      </View>
+
+      {/* Search Bar */}
+      <View className="px-8 mt-8 flex-row gap-3">
+        <View className="flex-1 bg-neutral-700 rounded-xl px-4 py-3 flex-row items-center gap-3">
             <Text className="text-green-400 text-lg">🔍</Text>
             <TextInput
               placeholder="Search projects..."
@@ -146,16 +152,22 @@ const Project = () => {
               value={searchQuery}
               onChangeText={setSearchQuery}
             />
-          </View>
-          <TouchableOpacity className="bg-neutral-700 rounded-xl px-4 py-3 justify-center items-center">
+        </View>
+        <TouchableOpacity className="bg-neutral-700 rounded-xl px-4 py-3 justify-center items-center">
             <Text className="text-white text-lg">⚡</Text>
           </TouchableOpacity>
-        </View>
+          <TouchableOpacity 
+            className="bg-neutral-700 rounded-xl px-4 py-3 justify-center items-center"
+            onPress={() => router.push('/(root)/ProjectSetting')}
+          >
+            <Text className="text-white text-lg">⚙️</Text>
+          </TouchableOpacity>
+      </View>
 
-        {/* Filter Buttons */}
-        <View className="py-5">
-          <ScrollView
-            horizontal
+      {/* Filter Buttons */}
+      <View className="py-5">
+        <ScrollView
+          horizontal
             showsHorizontalScrollIndicator={false}
             className="mt-2"
             contentContainerStyle={{ paddingHorizontal: 20, gap: 12 }}
@@ -172,14 +184,14 @@ const Project = () => {
               </TouchableOpacity>
             ))}
           </ScrollView>
-        </View>
+      </View>
 
-        {/* Projects List */}
-        <ScrollView
+      {/* Projects List */}
+      <ScrollView
           className="px-5 pb-24 flex-1"
           showsVerticalScrollIndicator={false}
-        >
-          {filteredProjects.length > 0 ? (
+      >
+        {filteredProjects.length > 0 ? (
             filteredProjects.map((project) => (
               <TouchableOpacity
                 key={project.id}
@@ -225,9 +237,8 @@ const Project = () => {
               <Text className="text-gray-400 text-lg">No projects found</Text>
             </View>
           )}
-        </ScrollView>
-      </View>
-    </>
+      </ScrollView>
+    </SafeAreaView>
   );
 };
 
