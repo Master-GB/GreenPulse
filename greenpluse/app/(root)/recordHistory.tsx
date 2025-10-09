@@ -7,9 +7,12 @@ import {
   StatusBar,
   Alert,
 } from "react-native";
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { ArrowLeft, Edit, Trash2, Info } from "lucide-react-native";
 import { useRouter } from "expo-router";
+import { collection, query, where, getDocs, deleteDoc, doc } from 'firebase/firestore';
+import { db } from '../../config/firebaseConfig';
+import { useAuth } from '../../contexts/AuthContext';
 
 // Hide the default navigator header for this route
 export const options = {
@@ -19,49 +22,62 @@ export const options = {
 // Type definition for energy records
 interface EnergyRecord {
   id: string;
+  userId: string;
   kwhValue: number;
-  dateTime: string;
   period: "Weekly" | "Monthly" | "Yearly";
-  device?: string;
-  notes?: string;
+  recordedAtString: string;
+  device: string;
+  timestamp: Date;
 }
 
 const RecordHistory = () => {
   const router = useRouter();
+  const { user } = useAuth();
+  const [records, setRecords] = useState<EnergyRecord[]>([]);
+  const [loading, setLoading] = useState(true);
 
-  // Dummy data - will be replaced with Firebase data in the future
-  const [records, setRecords] = useState<EnergyRecord[]>([
-    {
-      id: "1",
-      kwhValue: 3320,
-      dateTime: "11/26/25 1:45PM",
-      period: "Monthly",
-      device: "Solar Panel",
-    },
-    {
-      id: "2",
-      kwhValue: 2520,
-      dateTime: "12/26/25 3:45PM",
-      period: "Monthly",
-      device: "Main Meter",
-    },
-    {
-      id: "3",
-      kwhValue: 1720,
-      dateTime: "01/26/25 1:45PM",
-      period: "Weekly",
-      device: "Solar Panel",
-    },
-    {
-      id: "4",
-      kwhValue: 3873,
-      dateTime: "02/26/25 1:45PM",
-      period: "Monthly",
-      device: "Main Meter",
-    },
-  ]);
+  // Fetch records from Firebase
+  useEffect(() => {
+    const fetchRecords = async () => {
+      if (!user) {
+        setLoading(false);
+        return;
+      }
 
-  const handleDelete = (id: string, kwhValue: number) => {
+      try {
+        const recordsRef = collection(db, 'energyRecords');
+        const q = query(recordsRef, where('userId', '==', user.uid));
+        const querySnapshot = await getDocs(q);
+        
+        const fetchedRecords: EnergyRecord[] = [];
+        querySnapshot.forEach((doc) => {
+          const data = doc.data();
+          fetchedRecords.push({
+            id: doc.id,
+            userId: data.userId,
+            kwhValue: data.kwhValue,
+            period: data.period,
+            recordedAtString: data.recordedAtString,
+            device: data.device,
+            timestamp: data.timestamp.toDate(),
+          });
+        });
+
+        // Sort by timestamp (newest first)
+        fetchedRecords.sort((a, b) => b.timestamp.getTime() - a.timestamp.getTime());
+        setRecords(fetchedRecords);
+      } catch (error) {
+        console.error('Error fetching records:', error);
+        Alert.alert('Error', 'Failed to load records');
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchRecords();
+  }, [user]);
+
+  const handleDelete = async (id: string, kwhValue: number) => {
     Alert.alert(
       "Delete Record",
       `Are you sure you want to delete the record of ${kwhValue} kWh?`,
@@ -73,10 +89,15 @@ const RecordHistory = () => {
         {
           text: "Delete",
           style: "destructive",
-          onPress: () => {
-            // TODO: Implement Firebase delete logic
-            setRecords(records.filter((record) => record.id !== id));
-            Alert.alert("Success", "Record deleted successfully");
+          onPress: async () => {
+            try {
+              await deleteDoc(doc(db, 'energyRecords', id));
+              setRecords(records.filter((record) => record.id !== id));
+              Alert.alert("Success", "Record deleted successfully");
+            } catch (error) {
+              console.error('Error deleting record:', error);
+              Alert.alert("Error", "Failed to delete record");
+            }
           },
         },
       ]
@@ -88,7 +109,7 @@ const RecordHistory = () => {
     // For now, showing an alert. Will be implemented with proper navigation once route is registered
     Alert.alert(
       "Edit Record",
-      `Editing record: ${record.kwhValue} kWh\nDate: ${record.dateTime}`,
+      `Editing record: ${record.kwhValue} kWh\nDate: ${record.recordedAtString}`,
       [
         {
           text: "Cancel",
@@ -113,8 +134,20 @@ const RecordHistory = () => {
     <SafeAreaView className="flex-1 bg-[#0a1410]">
       <StatusBar barStyle="light-content" backgroundColor="#0a1410" />
 
-      {/* Header */}
-      <View className="px-5 pt-6 pb-4">
+      {loading ? (
+        <View className="flex-1 justify-center items-center">
+          <Text className="text-white text-lg">Loading records...</Text>
+        </View>
+      ) : !user ? (
+        <View className="flex-1 justify-center items-center px-5">
+          <Text className="text-white text-lg text-center mb-4">
+            You must be logged in to view your records.
+          </Text>
+        </View>
+      ) : (
+        <>
+          {/* Header */}
+          <View className="px-5 pt-6 pb-4">
         <View className="flex-row items-center justify-between mb-2">
           <TouchableOpacity
             onPress={handleBack}
@@ -145,7 +178,7 @@ const RecordHistory = () => {
               </Text>
               <View className="flex-row items-center">
                 <Text className="text-[#8a9a94] text-sm mr-2">
-                  {record.dateTime}
+                  {record.recordedAtString}
                 </Text>
                 <Info size={18} color="#8a9a94" strokeWidth={2} />
               </View>
@@ -184,6 +217,8 @@ const RecordHistory = () => {
           </View>
         )}
       </ScrollView>
+        </>
+      )}
     </SafeAreaView>
   );
 };

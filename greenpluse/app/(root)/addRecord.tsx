@@ -17,8 +17,9 @@ import camImage from "../../assets/images/camerascanner2.png";
 
 // --- Firebase Imports ---
 // We now import `firestore` directly from your firebase.ts file
-import { firestore } from '../../config/firebase';
+import { db } from '../../config/firebaseConfig';
 import { collection, addDoc } from 'firebase/firestore'; // Still need these functions
+import { useAuth } from '../../contexts/AuthContext';
 // ------------------------
 
 // Hide the default navigator header for this route
@@ -28,6 +29,7 @@ export const options = {
 
 const AddRecord = () => {
   const router = useRouter();
+  const { user } = useAuth();
   const [selectedPeriod, setSelectedPeriod] = useState<
     "Weekly" | "Monthly" | "Yearly"
   >("Monthly");
@@ -35,7 +37,12 @@ const AddRecord = () => {
   const [dateTime, setDateTime] = useState("11/03/25 11:31AM"); // This is a static string, consider using a Date object or proper date picker output
   const [device, setDevice] = useState("");
 
-  const handleSaveRecord = async () => { // Made async to await Firebase operations
+  const handleSaveRecord = async () => {
+    if (!user) {
+      Alert.alert("Error", "You must be logged in to save a record.");
+      return;
+    }
+
     if (!kwhValue.trim()) {
       Alert.alert("Error", "Please enter a kWh value.");
       return;
@@ -53,10 +60,11 @@ const AddRecord = () => {
 
     try {
       // Use the imported 'firestore' instance directly
-      const recordsCollection = collection(firestore, 'energyRecords'); // Reference to your 'energyRecords' collection
+      const recordsCollection = collection(db, 'energyRecords'); // Reference to your 'energyRecords' collection
 
       // Add a new document to the 'energyRecords' collection
       const docRef = await addDoc(recordsCollection, {
+        userId: user.uid, // Add user ID for data isolation
         kwhValue: parseFloat(kwhValue), // Convert kWh value to a number
         period: selectedPeriod,
         recordedAtString: dateTime, // Storing as a string for now; consider a proper Date object
