@@ -283,23 +283,110 @@ export default function RootLayout() {
             animationTypeForReplace: "push",
           }}
         />
+
+        <Stack.Screen
+          name="nft-gallery"
+          options={{
+            headerShown: true,
+            headerTitle: () => <AppHeader title="My NFTs" />,
+            headerStyle: {
+              backgroundColor: "#122119",
+            },
+            headerTintColor: "#fff",
+            animation: "slide_from_right",
+            gestureEnabled: true,
+            fullScreenGestureEnabled: true,
+            contentStyle: { backgroundColor: "#122119" },
+            presentation: "card",
+            headerShadowVisible: false,
+            headerTransparent: false,
+            headerBackground: () => (
+              <View style={{ flex: 1, backgroundColor: "#122119" }} />
+            ),
+            animationTypeForReplace: "push",
+          }}
+        />
         
 
 
-        <Stack.Screen 
-          name="MyDonatedList" 
-          options={{ headerShown: false }} 
-        />
+        
 
         <Stack.Screen 
           name="MyRequestProject" 
           options={{ headerShown: false }} 
         />
 
-        
+        <Stack.Screen
+          name="Certificate"
+          options={{
+            headerShown: true,
+            headerTitle: () => <AppHeader title="Certificate" />,
+            headerStyle: {
+              backgroundColor: "#122119",
+            },
+            headerTintColor: "#fff",
+            animation: "slide_from_right",
+            gestureEnabled: true,
+            fullScreenGestureEnabled: true,
+            contentStyle: { backgroundColor: "#122119" },
+            presentation: "card",
+            headerShadowVisible: false,
+            headerTransparent: false,
+            headerBackground: () => (
+              <View style={{ flex: 1, backgroundColor: "#122119" }} />
+            ),
+            animationTypeForReplace: "push",
+          }}
+        />
 
+        <Stack.Screen
+          name="contribution"
+          options={{
+            headerShown: true,
+            headerTitle: () => <AppHeader title="Contribution of Project" />,
+            headerStyle: {
+              backgroundColor: "#122119",
+            },
+            headerTintColor: "#fff",
+            animation: "slide_from_right",
+            gestureEnabled: true,
+            fullScreenGestureEnabled: true,
+            contentStyle: { backgroundColor: "#122119" },
+            presentation: "card",
+            headerShadowVisible: false,
+            headerTransparent: false,
+            headerBackground: () => (
+              <View style={{ flex: 1, backgroundColor: "#122119" }} />
+            ),
+            animationTypeForReplace: "push",
+          }}
+        />
 
-        
+<Stack.Screen
+          name="MyDonatedList"
+          options={{
+            headerShown: true,
+            headerTitle: () => <AppHeader title="My Donations" />,
+            headerStyle: {
+              backgroundColor: "#122119",
+            },
+            headerTintColor: "#fff",
+            animation: "slide_from_right",
+            gestureEnabled: true,
+            fullScreenGestureEnabled: true,
+            contentStyle: { backgroundColor: "#122119" },
+            presentation: "card",
+            headerShadowVisible: false,
+            headerTransparent: false,
+            headerBackground: () => (
+              <View style={{ flex: 1, backgroundColor: "#122119" }} />
+            ),
+            animationTypeForReplace: "push",
+          }}
+        />
+
+        <Stack.Screen name="PaymentPage" options={{ headerShown: false }} />
+        <Stack.Screen name="UpdateProjectStatus" options={{ headerShown: false }} />
 
         <Stack.Screen name="signIn" options={{ headerShown: false }} />
 
