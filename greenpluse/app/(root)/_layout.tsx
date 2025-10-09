@@ -245,7 +245,24 @@ export default function RootLayout() {
           options={{ headerShown: false }} 
         />
 
+
+        <Stack.Screen 
+          name="MyDonatedList" 
+          options={{ headerShown: false }} 
+        />
+
+        <Stack.Screen 
+          name="MyRequestProject" 
+          options={{ headerShown: false }} 
+        />
+
+        
+
+
+        
+
         <Stack.Screen name="signIn" options={{ headerShown: false }} />
+
       </Stack>
     </View>
    </ProtectedRoute>

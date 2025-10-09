@@ -29,8 +29,14 @@ const ProjectsSetting = () => {
       subtitle: 'View your contribution history',
       gradient: 'from-blue-500 to-cyan-600',
       bgColor: '#3B82F6',
-      onPress: () => console.log('My Donations')
-    },
+      onPress: () => {
+        try {
+          router.push('/MyDonatedList' as any);
+        } catch (error) {
+          console.error('Navigation error:', error);
+        }
+      }
+    }, 
     {
       id: 3,
       icon: MapPin,
@@ -56,7 +62,13 @@ const ProjectsSetting = () => {
       subtitle: 'Manage your active projects',
       gradient: 'from-teal-500 to-green-600',
       bgColor: '#14B8A6',
-      onPress: () => console.log('My Projects')
+      onPress: () => {
+        try {
+          router.push('/MyRequestProject' as any);
+        } catch (error) {
+          console.error('Navigation error:', error);
+        }
+      }
     },
     {
       id: 6,
