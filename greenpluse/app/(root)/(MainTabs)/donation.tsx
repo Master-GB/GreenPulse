@@ -9,7 +9,10 @@ import {
   Animated
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { useRouter } from 'expo-router';
+import { useRouter, useFocusEffect } from 'expo-router';
+import { collection, query, where, getDocs } from 'firebase/firestore';
+import { db } from '../../../config/firebaseConfig';
+import { useAuth } from '../../../contexts/AuthContext';
 import {
   ArrowLeft,
   Coins,
@@ -23,20 +26,93 @@ import { icons } from '@/constants/icons';
 
 export default function Donate() {
   const router = useRouter();
-  const monthlyData = [
-    { month: 'Jan', value: 72 },
-    { month: 'Feb', value: 45 },
-    { month: 'Mar', value: 38 },
-    { month: 'Apr', value: 68 },
-    { month: 'May', value: 60 },
-    { month: 'Jun', value: 82 },
-    { month: 'Jul', value: 40 },
-    { month: 'Aug', value: 42 },
-    { month: 'Sep', value: 55 },
-    { month: 'Oct', value: 45 },
-    { month: 'Nov', value: 15 },
-    { month: 'Dec', value: 75 },
-  ];
+  const { user } = useAuth();
+  const [monthlyData, setMonthlyData] = React.useState([
+    { month: 'Jan', value: 0 },
+    { month: 'Feb', value: 0 },
+    { month: 'Mar', value: 0 },
+    { month: 'Apr', value: 0 },
+    { month: 'May', value: 0 },
+    { month: 'Jun', value: 0 },
+    { month: 'Jul', value: 0 },
+    { month: 'Aug', value: 0 },
+    { month: 'Sep', value: 0 },
+    { month: 'Oct', value: 0 },
+    { month: 'Nov', value: 0 },
+    { month: 'Dec', value: 0 },
+  ]);
+  const [totalDonated, setTotalDonated] = React.useState(0);
+  const [familiesHelped, setFamiliesHelped] = React.useState(0);
+  const [communityTotal, setCommunityTotal] = React.useState(0);
+
+  const loadDonations = React.useCallback(async () => {
+    try {
+      if (!user) return;
+      
+      // Get user's donations
+      const userDonationsRef = collection(db, 'donations');
+      const userQ = query(userDonationsRef, where('userId', '==', user.uid));
+      const userSnap = await getDocs(userQ);
+      
+      // Get all donations for community total
+      const allDonationsRef = collection(db, 'donations');
+      const allSnap = await getDocs(allDonationsRef);
+
+      const months = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+      const acc = months.map((m) => ({ month: m, value: 0 }));
+      let userTotal = 0;
+      let communityTotal = 0;
+
+      // Process user's donations
+      userSnap.forEach((doc) => {
+        const data: any = doc.data();
+        const amount = typeof data?.amountCoins === 'number' ? data.amountCoins : 0;
+        userTotal += amount;
+        
+        let created: Date | null = null;
+        if (data?.createdAt?.toDate) {
+          created = data.createdAt.toDate();
+        } else if (data?.createdAt instanceof Date) {
+          created = data.createdAt;
+        }
+        if (!created) return;
+        const monthIndex = created.getMonth();
+        acc[monthIndex].value += amount;
+      });
+
+      // Process all donations for community total (current month only)
+      const currentMonth = new Date().getMonth();
+      allSnap.forEach((doc) => {
+        const data: any = doc.data();
+        const amount = typeof data?.amountCoins === 'number' ? data.amountCoins : 0;
+        
+        let created: Date | null = null;
+        if (data?.createdAt?.toDate) {
+          created = data.createdAt.toDate();
+        } else if (data?.createdAt instanceof Date) {
+          created = data.createdAt;
+        }
+        if (!created || created.getMonth() !== currentMonth) return;
+        
+        communityTotal += amount;
+      });
+
+      setMonthlyData(acc);
+      setTotalDonated(userTotal);
+      setCommunityTotal(communityTotal);
+      // Calculate families helped: 1 family for every 50 coins, minimum 1 if any coins donated
+      setFamiliesHelped(userTotal > 0 ? Math.ceil(userTotal / 50) : 0);
+    } catch (e) {
+      console.log('Error loading donations:', e);
+    }
+  }, [user]);
+
+  // Load donations on initial mount and when screen comes into focus
+  useFocusEffect(
+    React.useCallback(() => {
+      loadDonations();
+    }, [loadDonations])
+  );
 
   // Compute a dynamic max so bars keep the same visual height and the Y-axis scales instead
   const rawMax = Math.max(...monthlyData.map(d => d.value));
@@ -68,7 +144,7 @@ export default function Donate() {
               Coin Donated {'\n'}This Month
             </Text>
             <View className="items-end">
-              <Text className="text-gray-400 text-2xl font-bold">3,450/5,000</Text>
+              <Text className="text-gray-400 text-2xl font-bold">{communityTotal.toLocaleString()}/5,000</Text>
               <Text className="text-gray-400 text-base">kWh</Text>
             </View>
           </View>
@@ -77,13 +153,18 @@ export default function Donate() {
           <View className="bg-[#33664C] h-3 rounded-full mb-3 overflow-hidden">
             <View
               className="bg-[#19E57D] h-3 rounded-full"
-              style={{ width: '60%' }}
+              style={{ width: `${Math.min(100, (communityTotal / 5000) * 100)}%` }}
             />
           </View>
 
-          <Text className="text-[#94C7AD] text-base">
-            Community Goal: 5,000 kWh
-          </Text>
+          <View className="flex-row justify-between items-center">
+            <Text className="text-[#94C7AD] text-base">
+              Community Goal: 5,000 kWh
+            </Text>
+            <Text className="text-[#19E57D] font-bold">
+              {Math.min(100, Math.round((communityTotal / 5000) * 100))}%
+            </Text>
+          </View>
         </View>
 
         {/* Donate Energy Section */}
@@ -127,7 +208,7 @@ export default function Donate() {
               <View className="items-center">
                 <View className="flex-row items-center gap-2 mb-2">
                   <Image source={icons.coinH}  className="size-8 mb-1" />
-                  <Text className="text-black text-4xl font-bold">60</Text>
+                  <Text className="text-black text-4xl font-bold">{totalDonated}</Text>
                 </View>
                 <Text className="text-gray-300 text-sm text-center">
                   Coin donated in{'\n'}total
@@ -137,7 +218,7 @@ export default function Donate() {
               <View className="items-center">
                 <View className="flex-row items-center gap-2 mb-2">
                   <Globe size={28} color="#10b981" />
-                  <Text className="text-black text-4xl font-bold">18</Text>
+                  <Text className="text-black text-4xl font-bold">{familiesHelped}</Text>
                 </View>
                 <Text className="text-gray-300 text-sm text-center">
                   Families helped
@@ -151,7 +232,7 @@ export default function Donate() {
               <View className="flex-row items-center gap-2 mb-3">
                 <View className="w-3 h-3 bg-[#1AE57D] rounded-sm" />
                 <Text className="text-gray-100 text-sm text-center leading-5">
-                2025
+                {new Date().getFullYear()}
               </Text>
               </View>
               <Text className="text-black text-m font-bold text-center leading-5">
