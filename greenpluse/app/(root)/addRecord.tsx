@@ -15,6 +15,12 @@ import { useRouter } from "expo-router";
 import logoicon from "../../assets/images/GreenPluseLogo.png";
 import camImage from "../../assets/images/camerascanner2.png";
 
+// --- Firebase Imports ---
+// We now import `firestore` directly from your firebase.ts file
+import { firestore } from '../../config/firebase';
+import { collection, addDoc } from 'firebase/firestore'; // Still need these functions
+// ------------------------
+
 // Hide the default navigator header for this route
 export const options = {
   headerShown: false,
@@ -24,22 +30,60 @@ const AddRecord = () => {
   const router = useRouter();
   const [selectedPeriod, setSelectedPeriod] = useState<
     "Weekly" | "Monthly" | "Yearly"
-  >("Weekly");
+  >("Monthly");
   const [kwhValue, setKwhValue] = useState("");
-  const [dateTime, setDateTime] = useState("11/03/25 11:31AM");
+  const [dateTime, setDateTime] = useState("11/03/25 11:31AM"); // This is a static string, consider using a Date object or proper date picker output
   const [device, setDevice] = useState("");
 
-  const handleSaveRecord = () => {
-    // TODO: Implement Firebase save logic here
-    Alert.alert("Success", "Record will be saved to Firebase", [
-      {
-        text: "OK",
-        onPress: () => {
-          // navigate to the Record History screen
-          router.push("/(root)/recordHistory");
+  const handleSaveRecord = async () => { // Made async to await Firebase operations
+    if (!kwhValue.trim()) {
+      Alert.alert("Error", "Please enter a kWh value.");
+      return;
+    }
+
+    if (isNaN(parseFloat(kwhValue))) { // Added check for valid number
+      Alert.alert("Error", "Please enter a valid number for kWh value.");
+      return;
+    }
+
+    if (!device.trim()) {
+      Alert.alert("Error", "Please enter a device name.");
+      return;
+    }
+
+    try {
+      // Use the imported 'firestore' instance directly
+      const recordsCollection = collection(firestore, 'energyRecords'); // Reference to your 'energyRecords' collection
+
+      // Add a new document to the 'energyRecords' collection
+      const docRef = await addDoc(recordsCollection, {
+        kwhValue: parseFloat(kwhValue), // Convert kWh value to a number
+        period: selectedPeriod,
+        recordedAtString: dateTime, // Storing as a string for now; consider a proper Date object
+        device: device,
+        timestamp: new Date(), // Firestore automatically handles Date objects
+      });
+
+      console.log("Document written with ID: ", docRef.id);
+
+      Alert.alert("Success", "Record saved to Firebase!", [
+        {
+          text: "OK",
+          onPress: () => {
+            // Optional: Clear form fields after successful save
+            setKwhValue('');
+            setDevice('');
+            // navigate to the Record History screen
+            router.push("/(root)/recordHistory");
+          },
         },
-      },
-    ]);
+      ]);
+    } catch (e: unknown) {
+      // Safely extract a message from unknown error types
+      const errMsg = e instanceof Error ? e.message : String(e);
+      console.error("Error adding document: ", e);
+      Alert.alert("Error", "Failed to save record: " + errMsg);
+    }
   };
 
   const handleUseScanner = () => {
