@@ -30,5 +30,44 @@ service cloud.firestore {
       // Allow reading likes
       allow read: if request.auth != null;
     }
+
+    // Project Donations
+    match /ProjectDonation/{donationId} {
+      // Allow authenticated users to read all donations
+      allow read: if request.auth != null;
+      
+      // Allow authenticated users to create donations
+      allow create: if request.auth != null;
+      
+      // Allow authenticated users to update donations (for NFT minting, etc.)
+      allow update: if request.auth != null;
+      
+      // Allow users to delete their own donations
+      allow delete: if request.auth != null && 
+                   resource.data.userId == request.auth.uid;
+    }
+
+    // Legacy donations collection (for backward compatibility)
+    match /donations/{donationId} {
+      allow read: if request.auth != null;
+      allow create: if request.auth != null;
+      allow update: if request.auth != null;
+      allow delete: if request.auth != null;
+    }
+
+    // Project Requests
+    match /projectRequests/{projectId} {
+      // Allow authenticated users to read all projects
+      allow read: if request.auth != null;
+      
+      // Allow authenticated users to create projects
+      allow create: if request.auth != null;
+      
+      // Allow authenticated users to update projects
+      allow update: if request.auth != null;
+      
+      // Allow authenticated users to delete projects
+      allow delete: if request.auth != null;
+    }
   }
 }

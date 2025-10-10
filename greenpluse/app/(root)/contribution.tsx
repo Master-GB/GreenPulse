@@ -78,7 +78,7 @@ const Contribution = () => {
 
   const fetchContributionHistory = async () => {
     try {
-      const contributionsRef = collection(db, 'contributions');
+      const contributionsRef = collection(db, 'ProjectDonation');
       const q = query(contributionsRef, orderBy('uploadedAt', 'desc'), limit(10));
       
       const querySnapshot = await getDocs(q);
