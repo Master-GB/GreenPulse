@@ -14,7 +14,7 @@ import Slider from "@react-native-community/slider";
 import { Ionicons } from "@expo/vector-icons";
 import { useRouter, useFocusEffect } from "expo-router";
 import { router } from "expo-router";
-import { collection, query, where, getDocs } from "firebase/firestore";
+import { collection, query, where, getDocs, getDoc, doc } from "firebase/firestore";
 import { db } from "../../config/firebaseConfig";
 import { useAuth } from "../../contexts/AuthContext";
 
@@ -41,7 +41,7 @@ const PayBill: React.FC = () => {
   const [serviceAddress, setServiceAddress] = useState("");
   const [provider, setProvider] = useState("");
   const [loading, setLoading] = useState(true);
-  const [credits, setCredits] = useState(15);
+  const [userCredits, setUserCredits] = useState(0);
   const [showAccountDropdown, setShowAccountDropdown] = useState(false);
 
   // Fetch utility accounts from Firestore with detailed logging
@@ -139,17 +139,39 @@ const PayBill: React.FC = () => {
     }
   }, [user]);
 
+  // Fetch user credits from totalCredits collection
+  const fetchUserCredits = useCallback(async () => {
+    try {
+      if (!user) return;
+      
+      const creditsDoc = await getDoc(doc(db, 'totalCredits', user.uid));
+      if (creditsDoc.exists()) {
+        const creditsData = creditsDoc.data();
+        const totalCredits = Number(creditsData.totalReceived) || 0;
+        setUserCredits(Math.round(totalCredits));
+      } else {
+        setUserCredits(0);
+      }
+    } catch (error) {
+      console.error('Error loading user credits:', error);
+      setUserCredits(0);
+    }
+  }, [user]);
+
   // Add effect to log component mount and user changes
-  // Add focus effect to refresh accounts when screen comes into focus
+  // Add focus effect to refresh accounts and credits when screen comes into focus
   useFocusEffect(
     useCallback(() => {
-      console.log("Screen focused, refreshing accounts...");
+      console.log("Screen focused, refreshing accounts and credits...");
       if (user) {
         fetchAccounts().catch((error) => {
           console.error("Error refreshing accounts:", error);
         });
+        fetchUserCredits().catch(error => {
+          console.error("Error refreshing credits:", error);
+        });
       }
-    }, [user, fetchAccounts])
+    }, [user, fetchAccounts, fetchUserCredits])
   );
 
   // Initial load and user change effect
@@ -219,7 +241,7 @@ const PayBill: React.FC = () => {
     }
   }, [accounts, selectedAccountIndex]);
 
-  const creditValue = credits * 23.38;
+  const creditValue = userCredits * 23.38;
 
   const handleAccountSelect = (index: number) => {
     setSelectedAccountIndex(index);
@@ -237,7 +259,7 @@ const PayBill: React.FC = () => {
         <View className="mx-5 mt-4 bg-[#1a3333] rounded-2xl p-5 border border-[#2a4444]">
           <Text className="text-gray-400 text-sm mb-2">Available Balance</Text>
           <Text className="text-[#00ff88] text-3xl font-bold">
-            {credits} Credit = Rs {creditValue.toFixed(2)}
+            {userCredits} Credit{userCredits !== 1 ? 's' : ''} = Rs {creditValue.toFixed(2)}
           </Text>
         </View>
 
@@ -335,7 +357,7 @@ const PayBill: React.FC = () => {
                       accountNickname: accountNickname || "My Account",
                       serviceAddress,
                       provider,
-                      credits: credits.toString(),
+                      credits: userCredits.toString(),
                       creditValue: creditValue.toString(),
                     },
                   });
