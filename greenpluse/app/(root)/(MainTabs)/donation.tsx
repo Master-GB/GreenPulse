@@ -10,7 +10,7 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter, useFocusEffect } from 'expo-router';
-import { collection, query, where, getDocs } from 'firebase/firestore';
+import { collection, query, where, getDocs, getDoc, doc } from 'firebase/firestore';
 import { db } from '../../../config/firebaseConfig';
 import { useAuth } from '../../../contexts/AuthContext';
 import {
@@ -44,6 +44,8 @@ export default function Donate() {
   const [totalDonated, setTotalDonated] = React.useState(0);
   const [familiesHelped, setFamiliesHelped] = React.useState(0);
   const [communityTotal, setCommunityTotal] = React.useState(0);
+  const [userCoins, setUserCoins] = React.useState(0);
+  const [userCredits, setUserCredits] = React.useState(0);
 
   const loadDonations = React.useCallback(async () => {
     try {
@@ -108,10 +110,45 @@ export default function Donate() {
   }, [user]);
 
   // Load donations on initial mount and when screen comes into focus
+  // Load user's coin balance and credits
+  const loadUserData = React.useCallback(async () => {
+    try {
+      if (!user) return;
+      
+      // Load coins from energy records
+      const recordsRef = collection(db, 'users', user.uid, 'energyRecords');
+      const snapshot = await getDocs(recordsRef);
+      
+      let totalCoins = 0;
+      snapshot.forEach(doc => {
+        const data = doc.data();
+        if (data.coinValue) {
+          totalCoins += Number(data.coinValue);
+        }
+      });
+      
+      setUserCoins(Math.round(totalCoins));
+      
+      // Load credits from totalCredits collection
+      const creditsDoc = await getDoc(doc(db, 'totalCredits', user.uid));
+      if (creditsDoc.exists()) {
+        const creditsData = creditsDoc.data();
+        const totalCredits = Number(creditsData.totalReceived) || 0;
+        setUserCredits(Math.round(totalCredits));
+      } else {
+        setUserCredits(0);
+      }
+    } catch (error) {
+      console.error('Error loading user data:', error);
+    }
+  }, [user]);
+
+  // Load all data on initial mount and when screen comes into focus
   useFocusEffect(
     React.useCallback(() => {
       loadDonations();
-    }, [loadDonations])
+      loadUserData();
+    }, [loadDonations, loadUserData])
   );
 
   // Compute a dynamic max so bars keep the same visual height and the Y-axis scales instead
@@ -123,16 +160,18 @@ export default function Donate() {
     <SafeAreaView className="flex-1 bg-[#122119]">
       <StatusBar barStyle="light-content" />
 
-      {/* Header */}
       <View className="flex-row justify-between items-center px-5 py-1">
         <TouchableOpacity>
           <ArrowLeft size={28} color="white" />
         </TouchableOpacity>
         <Text className="text-white text-2xl font-bold ml-8">Donation</Text>
-        <TouchableOpacity className='bg-[#2a3e3e] rounded-full px-3 py-2 flex-row items-center gap-2'>
-            <Image source={icons.coinH}  className="size-5 mb-1" />
-            <Text className="text-white font-semibold">120</Text>
-            <Text className="text-gray-400">/5</Text>
+          <TouchableOpacity 
+            className='bg-[#2a3e3e] rounded-full px-3 py-2 flex-row items-center gap-2'
+            onPress={() => router.push('/(root)/wallet')}
+          >
+            <Image source={icons.coinH} className="size-5 mb-1" />
+            <Text className="text-white font-semibold">{userCoins.toLocaleString()}</Text>
+            <Text className="text-white font-semibold">/{userCredits.toLocaleString()}</Text>
           </TouchableOpacity>
       </View>
 

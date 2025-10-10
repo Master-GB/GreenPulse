@@ -2,7 +2,7 @@ import React from 'react';
 import { View, Text, ScrollView, TouchableOpacity, Image, FlatList, StatusBar, ImageBackground } from 'react-native';
 import { useRouter, useFocusEffect } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { collection, getDocs, query, orderBy, limit, writeBatch, doc, DocumentData } from 'firebase/firestore';
+import { collection, getDocs, query, orderBy, limit, writeBatch, doc, DocumentData, getDoc } from 'firebase/firestore';
 import { db } from '../../../config/firebaseConfig';
 import { useAuth } from '../../../contexts/AuthContext';
 import {
@@ -30,6 +30,8 @@ export default function Home() {
   };
 
   const [communityStories, setCommunityStories] = React.useState<Story[]>([]);
+  const [userCoins, setUserCoins] = React.useState(0);
+  const [userCredits, setUserCredits] = React.useState(0);
 
   const loadCommunityTotal = React.useCallback(async () => {
     try {
@@ -69,25 +71,7 @@ export default function Home() {
     try {
       const stories = [
         {
-          title: 'Powering Safe Nights',
-          excerpt: 'You & 200 others powered safe nights for 80 families',
-          body: 'Through your contributions, we installed solar lanterns and micro-grids that now power safe nights for 80 families. Children can study, and parents can work in the evenings without relying on unsafe kerosene lamps.',
-          image: 'https://images.unsplash.com/photo-1488521787991-ed7bbaae773c?w=400',
-          createdAt: new Date('2025-10-01')
-        },
-        {
-          title: 'Solar Lights Transform Village Life',
-          excerpt: '200 families now have access to clean, reliable lighting after our solar panel installation project.',
-          body: 'Thanks to your generous donations, we\'ve installed solar panels in a remote village, bringing light to 200 families. Children can now study after dark, and small businesses can operate longer hours, significantly improving the community\'s quality of life.',
-          image: 'https://images.unsplash.com/photo-1509391366360-2e959784a276?w=800',
-          createdAt: new Date('2025-09-15')
-        },
-        {
-          title: 'Lighting Classrooms',
-          excerpt: 'Together, the community lit up 3 classrooms in rural schools.',
-          body: 'A collaborative effort brought clean electricity to 3 classrooms, enabling evening classes and computer literacy programs for students in rural areas.',
-          image: 'https://images.unsplash.com/photo-1497633762265-9d179a990aa6?w=400',
-          createdAt: new Date('2025-09-01')
+          
         }
       ];
 
@@ -139,12 +123,46 @@ export default function Home() {
     }
   }, []);
 
-  // Load community total and stories on initial mount and when screen comes into focus
+  // Load user's coin balance and credits
+  const loadUserData = React.useCallback(async () => {
+    try {
+      if (!user) return;
+      
+      // Load coins from energy records
+      const recordsRef = collection(db, 'users', user.uid, 'energyRecords');
+      const snapshot = await getDocs(recordsRef);
+      
+      let totalCoins = 0;
+      snapshot.forEach(doc => {
+        const data = doc.data();
+        if (data.coinValue) {
+          totalCoins += Number(data.coinValue);
+        }
+      });
+      
+      setUserCoins(Math.round(totalCoins));
+      
+      // Load credits from totalCredits collection
+      const creditsDoc = await getDoc(doc(db, 'totalCredits', user.uid));
+      if (creditsDoc.exists()) {
+        const creditsData = creditsDoc.data();
+        const totalCredits = Number(creditsData.totalReceived) || 0;
+        setUserCredits(Math.round(totalCredits));
+      } else {
+        setUserCredits(0);
+      }
+    } catch (error) {
+      console.error('Error loading user data:', error);
+    }
+  }, [user]);
+
+  // Load all data on initial mount and when screen comes into focus
   useFocusEffect(
     React.useCallback(() => {
       loadCommunityTotal();
       loadCommunityStories();
-    }, [loadCommunityTotal, loadCommunityStories])
+      loadUserData();
+    }, [loadCommunityTotal, loadCommunityStories, loadUserData])
   );
   return (
     <SafeAreaView className="flex-1 bg-[#122119]">
@@ -166,8 +184,8 @@ export default function Home() {
           onPress={() => router.push('/(root)/wallet')}
           >
             <Image source={icons.coinH}  className="size-5 mb-1" />
-            <Text className="text-white font-semibold">120</Text>
-            <Text className="text-gray-400">/5</Text>
+            <Text className="text-white font-semibold">{userCoins}</Text>
+            <Text className="text-white font-semibold">/{userCredits}</Text>
           </TouchableOpacity>
          
         </View>

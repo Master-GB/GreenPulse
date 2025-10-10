@@ -3,11 +3,55 @@ import { StatusBar, View, Text, TouchableOpacity, Image } from "react-native";
 import { icons } from "@/constants/icons";
 import { useRouter } from "expo-router";
 import ProtectedRoute from '../../components/ProtectedRoute';
+import { collection, getDocs, doc, getDoc } from 'firebase/firestore';
+import { db } from '../../config/firebaseConfig';
+import { useAuth } from '../../contexts/AuthContext';
+import { useEffect, useState } from 'react';
 
 // Reusable header that accepts a dynamic title
 type HeaderProps = { title: string };
 function AppHeader({ title }: HeaderProps) {
   const router = useRouter();
+  const { user } = useAuth();
+  const [userCoins, setUserCoins] = useState(0);
+  const [userCredits, setUserCredits] = useState(0);
+
+  // Load user's coin balance and credits
+  useEffect(() => {
+    const loadUserData = async () => {
+      try {
+        if (!user) return;
+        
+        // Load coins from energy records
+        const recordsRef = collection(db, 'users', user.uid, 'energyRecords');
+        const snapshot = await getDocs(recordsRef);
+        
+        let totalCoins = 0;
+        snapshot.forEach(doc => {
+          const data = doc.data();
+          if (data.coinValue) {
+            totalCoins += Number(data.coinValue);
+          }
+        });
+        
+        setUserCoins(Math.round(totalCoins));
+        
+        // Load credits from totalCredits collection
+        const creditsDoc = await getDoc(doc(db, 'totalCredits', user.uid));
+        if (creditsDoc.exists()) {
+          const creditsData = creditsDoc.data();
+          const totalCredits = Number(creditsData.totalReceived) || 0;
+          setUserCredits(Math.round(totalCredits));
+        } else {
+          setUserCredits(0);
+        }
+      } catch (error) {
+        console.error('Error loading user data:', error);
+      }
+    };
+
+    loadUserData();
+  }, [user]);
   return (
     <View className="w-full flex-row items-center justify-between px-2 mb-2">
       <View className="flex-1 items-center">
@@ -33,8 +77,8 @@ function AppHeader({ title }: HeaderProps) {
           resizeMode="contain"
         />
         <View className="flex-row items-baseline ml-1">
-          <Text className="text-white font-semibold">120</Text>
-          <Text className="text-gray-400 text-sm">/5</Text>
+          <Text className="text-white font-semibold">{userCoins}</Text>
+          <Text className="text-gray-400 text-sm">/{userCredits}</Text>
         </View>
       </TouchableOpacity>
     </View>
