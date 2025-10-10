@@ -59,7 +59,7 @@ const Certificate = () => {
 
   const fetchCertificate = async () => {
     try {
-      const donationRef = doc(db, 'donations', id as string);
+      const donationRef = doc(db, 'ProjectDonation', id as string);
       const donationDoc = await getDoc(donationRef);
       
       if (donationDoc.exists()) {

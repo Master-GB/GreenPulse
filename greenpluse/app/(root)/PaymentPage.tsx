@@ -113,7 +113,7 @@ const PaymentPage = () => {
       await updateDoc(projectRef, updateData);
 
       // Save donation record for this user
-      await addDoc(collection(db, 'donations'), {
+      await addDoc(collection(db, 'ProjectDonation'), {
         userId: user.uid,
         userEmail: user.email,
         projectId: projectId,

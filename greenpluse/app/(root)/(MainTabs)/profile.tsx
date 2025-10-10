@@ -70,7 +70,7 @@ const Profile = () => {
       let donationCount = 0;
       let totalDonationAmount = 0;
       try {
-        const donationsRef = collection(db, 'donations');
+        const donationsRef = collection(db, 'ProjectDonation');
         const donationsQuery = query(donationsRef, where('userId', '==', user.uid));
         const donationsSnapshot = await getDocs(donationsQuery);
         donationCount = donationsSnapshot.size;

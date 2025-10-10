@@ -190,7 +190,7 @@ const Contribution = () => {
       const year = currentDate.getFullYear();
 
       try {
-        await addDoc(collection(db, 'contributions'), {
+        await addDoc(collection(db, 'ProjectDonation'), {
           projectId: selectedProject.id,
           projectTitle: selectedProject.projectTitle,
           month: month,

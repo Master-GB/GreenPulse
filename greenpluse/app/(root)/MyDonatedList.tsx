@@ -36,18 +36,23 @@ const MyDonatedList = () => {
         return;
       }
 
+      console.log('Fetching donations for user:', user.uid);
+
       // Query donations collection for current user
-      const donationsRef = collection(db, 'donations');
+      const donationsRef = collection(db, 'ProjectDonation');
       const q = query(
         donationsRef,
         where('userId', '==', user.uid)
       );
 
       const querySnapshot = await getDocs(q);
+      console.log('Found donations:', querySnapshot.size);
+      
       const fetchedDonations: DonationType[] = [];
 
       querySnapshot.forEach((doc) => {
         const data = doc.data();
+        console.log('Donation data:', data);
         fetchedDonations.push({
           id: doc.id,
           title: data.projectTitle || 'Untitled Project',
@@ -63,21 +68,10 @@ const MyDonatedList = () => {
       // Sort by date descending (newest first)
       fetchedDonations.sort((a, b) => (b.timestamp || 0) - (a.timestamp || 0));
 
+      console.log('Processed donations:', fetchedDonations.length);
       setDonations(fetchedDonations);
     } catch (error) {
       console.error('Error fetching donations:', error);
-      // Fallback to mock data
-      setDonations([
-        {
-          id: '1',
-          title: 'Solar Panel Installation in Rural Village',
-          amount: 500,
-          date: '2024-03-15 10:30 AM',
-          image: 'https://images.unsplash.com/photo-1509391366360-2e959784a276?w=400',
-          certificateStatus: 'Pending',
-          projectId: 'mock1'
-        }
-      ]);
     } finally {
       setLoading(false);
     }
@@ -95,7 +89,6 @@ const MyDonatedList = () => {
     <>
       <StatusBar barStyle="light-content" backgroundColor="#1a1a1a" />
       <View style={{ flex: 1, backgroundColor: '#122119' }}>
-        
 
         {/* Donations List */}
         <ScrollView
@@ -107,6 +100,20 @@ const MyDonatedList = () => {
             <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', paddingVertical: 60 }}>
               <ActivityIndicator size="large" color="#10b981" />
               <Text style={{ color: '#6b7280', fontSize: 14, marginTop: 12 }}>Loading your donations...</Text>
+            </View>
+          ) : donations.length === 0 ? (
+            <View style={{
+              flex: 1,
+              justifyContent: 'center',
+              alignItems: 'center',
+              paddingVertical: 60
+            }}>
+              <Text style={{ color: '#6b7280', fontSize: 16, textAlign: 'center' }}>
+                No donations yet
+              </Text>
+              <Text style={{ color: '#4b5563', fontSize: 14, marginTop: 8, textAlign: 'center' }}>
+                Start supporting projects to see your donations here
+              </Text>
             </View>
           ) : donations.map((donation) => (
             <View
@@ -186,22 +193,6 @@ const MyDonatedList = () => {
               </View>
             </View>
           ))}
-
-          {donations.length === 0 && (
-            <View style={{
-              flex: 1,
-              justifyContent: 'center',
-              alignItems: 'center',
-              paddingVertical: 60
-            }}>
-              <Text style={{ color: '#6b7280', fontSize: 16, textAlign: 'center' }}>
-                No donations yet
-              </Text>
-              <Text style={{ color: '#4b5563', fontSize: 14, marginTop: 8, textAlign: 'center' }}>
-                Start supporting projects to see your donations here
-              </Text>
-            </View>
-          )}
         </ScrollView>
 
         {/* Bottom Button */}
