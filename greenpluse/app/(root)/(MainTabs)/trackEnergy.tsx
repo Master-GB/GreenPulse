@@ -1,7 +1,7 @@
-import React, { useEffect, useMemo, useState } from 'react'
+import React, { useCallback, useMemo, useState } from 'react' // useCallback and useFocusEffect for better data fetching on screen focus
 import { View, Text, ScrollView, Dimensions, TouchableOpacity } from 'react-native'
 import { BarChart, LineChart } from 'react-native-chart-kit'
-import { useRouter } from 'expo-router'
+import { useRouter, useFocusEffect } from 'expo-router'
 import { collection, getDocs } from 'firebase/firestore'
 
 import { db } from '../../../config/firebaseConfig'
@@ -12,6 +12,24 @@ const DEFAULT_LINE_CHART = {
   datasets: [{ data: [0, 0, 0, 0, 0, 0] }],
 }
 
+const DEFAULT_USAGE_BAR_CHART = {
+  labels: ['01', '02', '03', '04'],
+  datasets: [{ data: [0, 0, 0, 0] }],
+}
+
+type ComponentStat = { name: string; pct: number }
+
+const DEFAULT_COMPONENTS: ComponentStat[] = [
+  { name: 'Device 1', pct: 0 },
+  { name: 'Device 2', pct: 0 },
+  { name: 'Device 3', pct: 0 },
+]
+
+const createUsageBarChartFallback = () => ({
+  labels: [...DEFAULT_USAGE_BAR_CHART.labels],
+  datasets: [{ data: [...DEFAULT_USAGE_BAR_CHART.datasets[0].data] }],
+})
+
 // Pixel-approximate Track Energy screen using nativewind/tailwind classes
 export default function TrackEnergy() {
   const router = useRouter()
@@ -21,109 +39,190 @@ export default function TrackEnergy() {
   const [availableCoins, setAvailableCoins] = useState(0)
   const [totalCoinsGenerated, setTotalCoinsGenerated] = useState(0)
   const [coinLineChart, setCoinLineChart] = useState(DEFAULT_LINE_CHART)
+  const [usedThisMonth, setUsedThisMonth] = useState(0)
+  const [totalUsage, setTotalUsage] = useState(0)
+  const [monthlyAverageUsage, setMonthlyAverageUsage] = useState(0)
+  const [usageComponents, setUsageComponents] = useState<ComponentStat[]>([])
+  const [usageBarChart, setUsageBarChart] = useState(createUsageBarChartFallback)
 
-  useEffect(() => {
-    let isMounted = true
+  // FIX: Replace useEffect with useFocusEffect
+  useFocusEffect(
+    useCallback(() => {
+      let isMounted = true
 
-    const fetchCoinData = async () => {
-      if (!user) {
-        if (isMounted) {
-          setAvailableCoins(0)
-          setTotalCoinsGenerated(0)
-          setCoinLineChart(DEFAULT_LINE_CHART)
-        }
-        return
+      const resetUsageState = () => {
+        setUsedThisMonth(0)
+        setTotalUsage(0)
+        setMonthlyAverageUsage(0)
+        setUsageComponents([])
+        setUsageBarChart(createUsageBarChartFallback())
       }
 
-      try {
-        const recordsRef = collection(db, 'users', user.uid, 'energyRecords')
-        const snapshot = await getDocs(recordsRef)
-
-        let runningTotal = 0
-        const monthlyTotals = new Map<string, number>()
-
-        snapshot.forEach((docSnapshot) => {
-          const data = docSnapshot.data()
-          const coins = Number(data.coinValue) || 0
-          runningTotal += coins
-
-          const recordedAt = data.recordedAt?.toDate?.()
-            || data.timestamp?.toDate?.()
-            || new Date(data.recordedAtString || Date.now())
-
-          if (recordedAt instanceof Date && !Number.isNaN(recordedAt.valueOf())) {
-            const monthKey = `${recordedAt.getFullYear()}-${String(recordedAt.getMonth() + 1).padStart(2, '0')}`
-            monthlyTotals.set(monthKey, (monthlyTotals.get(monthKey) || 0) + coins)
+      const fetchCoinData = async () => {
+        if (!user) {
+          if (isMounted) {
+            setAvailableCoins(0)
+            setTotalCoinsGenerated(0)
+            setCoinLineChart(DEFAULT_LINE_CHART)
+            resetUsageState()
           }
-        })
+          return
+        }
 
-        if (isMounted) {
-          const roundedTotal = Math.round(runningTotal)
-          setAvailableCoins(roundedTotal)
-          setTotalCoinsGenerated(roundedTotal)
+        try {
+          const recordsRef = collection(db, 'users', user.uid, 'energyRecords')
+          const snapshot = await getDocs(recordsRef)
 
-          if (monthlyTotals.size > 0) {
-            const sortedKeys = Array.from(monthlyTotals.keys()).sort()
-            const recentKeys = sortedKeys.slice(-6)
-            const labels = recentKeys.map((key) => key.split('-')[1])
-            const datasetValues = recentKeys.map((key) => Math.round(monthlyTotals.get(key) || 0))
+          let runningTotal = 0
+          const monthlyTotals = new Map<string, number>()
 
-            setCoinLineChart({
-              labels,
-              datasets: [{ data: datasetValues }],
-            })
-          } else {
+          snapshot.forEach((docSnapshot) => {
+            const data = docSnapshot.data()
+            const coins = Number(data.coinValue) || 0
+            runningTotal += coins
+
+            const recordedAt = data.recordedAt?.toDate?.()
+              || data.timestamp?.toDate?.()
+              || new Date(data.recordedAtString || Date.now())
+
+            if (recordedAt instanceof Date && !Number.isNaN(recordedAt.valueOf())) {
+              const monthKey = `${recordedAt.getFullYear()}-${String(recordedAt.getMonth() + 1).padStart(2, '0')}`
+              monthlyTotals.set(monthKey, (monthlyTotals.get(monthKey) || 0) + coins)
+            }
+          })
+
+          if (isMounted) {
+            const roundedTotal = Math.round(runningTotal)
+            setAvailableCoins(roundedTotal)
+            setTotalCoinsGenerated(roundedTotal)
+
+            if (monthlyTotals.size > 0) {
+              const sortedKeys = Array.from(monthlyTotals.keys()).sort()
+              const recentKeys = sortedKeys.slice(-6)
+              const labels = recentKeys.map((key) => key.split('-')[1])
+              const datasetValues = recentKeys.map((key) => Math.round(monthlyTotals.get(key) || 0))
+
+              setCoinLineChart({
+                labels,
+                datasets: [{ data: datasetValues }],
+              })
+            } else {
+              setCoinLineChart(DEFAULT_LINE_CHART)
+            }
+          }
+        } catch (error) {
+          console.error('Error fetching coin data:', error)
+          if (isMounted) {
+            setAvailableCoins(0)
+            setTotalCoinsGenerated(0)
             setCoinLineChart(DEFAULT_LINE_CHART)
           }
         }
-      } catch (error) {
-        console.error('Error fetching coin data:', error)
-        if (isMounted) {
-          setAvailableCoins(0)
-          setTotalCoinsGenerated(0)
-          setCoinLineChart(DEFAULT_LINE_CHART)
+      }
+
+      const fetchUsageData = async () => {
+        if (!user) {
+          if (isMounted) {
+            resetUsageState()
+          }
+          return
+        }
+
+        try {
+          const recordsRef = collection(db, 'users', user.uid, 'usageRecords')
+          const snapshot = await getDocs(recordsRef)
+
+          let usageTotal = 0
+          const monthlyTotals = new Map<string, number>()
+          const deviceTotals = new Map<string, number>()
+
+          snapshot.forEach((docSnapshot) => {
+            const data = docSnapshot.data()
+            const usage = Number(data.kwhValue) || 0
+            usageTotal += usage
+
+            const recordedAt = data.recordedAt?.toDate?.()
+              || data.timestamp?.toDate?.()
+              || new Date(data.recordedAtString || Date.now())
+
+            if (recordedAt instanceof Date && !Number.isNaN(recordedAt.valueOf())) {
+              const monthKey = `${recordedAt.getFullYear()}-${String(recordedAt.getMonth() + 1).padStart(2, '0')}`
+              monthlyTotals.set(monthKey, (monthlyTotals.get(monthKey) || 0) + usage)
+            }
+
+            const deviceName = (data.device || 'Unknown device').trim()
+            if (deviceName.length > 0) {
+              deviceTotals.set(deviceName, (deviceTotals.get(deviceName) || 0) + usage)
+            }
+          })
+
+          if (isMounted) {
+            const now = new Date()
+            const currentKey = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`
+            const currentMonthUsage = monthlyTotals.get(currentKey) || 0
+
+            const totalRounded = Math.round(usageTotal)
+            const monthlyAvg = monthlyTotals.size > 0 ? usageTotal / monthlyTotals.size : 0
+
+            const sortedDeviceEntries = Array.from(deviceTotals.entries()).sort((a, b) => b[1] - a[1]).slice(0, 3)
+            const components = sortedDeviceEntries.map(([name, value]) => ({
+              name,
+              pct: usageTotal > 0 ? Math.min(1, value / usageTotal) : 0,
+            }))
+
+            while (components.length < 3) {
+              const index = components.length + 1
+              components.push({ name: `Device ${index}`, pct: 0 })
+            }
+
+            const sortedMonthKeys = Array.from(monthlyTotals.keys()).sort()
+            const recentKeys = sortedMonthKeys.slice(-4)
+            const labels = recentKeys.length > 0 ? recentKeys.map((key) => key.split('-')[1]) : [...DEFAULT_USAGE_BAR_CHART.labels]
+            const datasetValues = recentKeys.length > 0
+              ? recentKeys.map((key) => Math.round(monthlyTotals.get(key) || 0))
+              : [...DEFAULT_USAGE_BAR_CHART.datasets[0].data]
+
+            setUsedThisMonth(Math.round(currentMonthUsage))
+            setTotalUsage(totalRounded)
+            setMonthlyAverageUsage(Math.round(monthlyAvg))
+            setUsageComponents(components)
+            setUsageBarChart({
+              labels,
+              datasets: [{ data: datasetValues }],
+            })
+          }
+        } catch (error) {
+          console.error('Error fetching usage data:', error)
+          if (isMounted) {
+            resetUsageState()
+          }
         }
       }
-    }
 
-    fetchCoinData()
+      fetchCoinData()
+      fetchUsageData()
 
-    return () => {
-      isMounted = false
-    }
-  }, [user])
+      return () => {
+        isMounted = false
+      }
+    }, [user]) // The dependency array for useCallback
+  )
 
   // Dummy data variables for Firebase integration
   const dummyData = useMemo(() => ({
-    // this one is not implemented yet
-    usedThisMonth: 14738,
-    // fetch this by summing up all the coins from energy usage records 
+    usedThisMonth,
     availableCoins,
 
-    // energy usage not yet implemented
-    totalEnergyUse: 19456,
-    barChartData: {
-      labels: ['05', '06', '07', '08'],
-      datasets: [{ data: [30, 50, 90, 50] }]
-    },
+    totalEnergyUse: totalUsage,
+    barChartData: usageBarChart,
 
-    // not yet implemented
-    monthlyAverage: 14738,
-    frequentlyUsedComponents: [
-      { name: 'Air Conditioner', pct: 0.9 },
-      { name: 'Printer', pct: 0.65 },
-      { name: 'PC', pct: 0.55 },
-    ],
+    monthlyAverage: monthlyAverageUsage,
+    frequentlyUsedComponents: usageComponents.length ? usageComponents : DEFAULT_COMPONENTS,
 
-    // retrieve these data from the records, labels are months
     totalCoinsGenerated,
     lineChartData: coinLineChart,
-    renewableSources: [
-      { name: 'Solar panels', pct: 0.85 }, // get these info from "device" in energyRecords collection
-      { name: 'Wind turbine', pct: 0.6 },
-      { name: 'Generator', pct: 0.45 },
-    ]
-  }), [availableCoins, coinLineChart, totalCoinsGenerated])
+    renewableSources: usageComponents.length ? usageComponents : DEFAULT_COMPONENTS,
+  }), [availableCoins, coinLineChart, monthlyAverageUsage, totalCoinsGenerated, totalUsage, usageBarChart, usageComponents, usedThisMonth])
 
   return (
     <ScrollView className="flex-1 bg-[#122119] px-6 w-full" contentContainerStyle={{ paddingBottom: 48 }}>
@@ -162,13 +261,22 @@ export default function TrackEnergy() {
 
           {/* Centered button */}
           <View className="items-center">
-            <TouchableOpacity
-              onPress={() => router.push('/addRecord')}
-              className="bg-[#13f07a] px-4 py-3 rounded-full"
-              style={{ width: BUTTON_WIDTH, alignItems: 'center' }}
-            >
-              <Text className="text-black font-semibold">Add coin</Text>
-            </TouchableOpacity>
+            <View className="flex-row gap-3">
+              <TouchableOpacity
+                onPress={() => router.push('/(root)/addRecord')}
+                className="bg-[#13f07a] px-4 py-3 rounded-full"
+                style={{ width: BUTTON_WIDTH, alignItems: 'center' }}
+              >
+                <Text className="text-black font-semibold">Add coin</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                onPress={() => router.push('/(root)/addUsage')}
+                className="bg-[#13f07a] px-4 py-3 rounded-full"
+                style={{ width: BUTTON_WIDTH, alignItems: 'center' }}
+              >
+                <Text className="text-black font-semibold">Add usage</Text>
+              </TouchableOpacity>
+            </View>
           </View>
         </View>
       </View>
