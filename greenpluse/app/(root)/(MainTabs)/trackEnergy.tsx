@@ -1,12 +1,130 @@
-import React from 'react'
+import React, { useEffect, useMemo, useState } from 'react'
 import { View, Text, ScrollView, Dimensions, TouchableOpacity } from 'react-native'
 import { BarChart, LineChart } from 'react-native-chart-kit'
 import { useRouter } from 'expo-router'
+import { collection, getDocs } from 'firebase/firestore'
+
+import { db } from '../../../config/firebaseConfig'
+import { useAuth } from '../../../contexts/AuthContext'
+
+const DEFAULT_LINE_CHART = {
+  labels: ['05', '06', '07', '08', '09', '10'],
+  datasets: [{ data: [0, 0, 0, 0, 0, 0] }],
+}
 
 // Pixel-approximate Track Energy screen using nativewind/tailwind classes
 export default function TrackEnergy() {
   const router = useRouter()
+  const { user } = useAuth()
   const BUTTON_WIDTH = 140
+
+  const [availableCoins, setAvailableCoins] = useState(0)
+  const [totalCoinsGenerated, setTotalCoinsGenerated] = useState(0)
+  const [coinLineChart, setCoinLineChart] = useState(DEFAULT_LINE_CHART)
+
+  useEffect(() => {
+    let isMounted = true
+
+    const fetchCoinData = async () => {
+      if (!user) {
+        if (isMounted) {
+          setAvailableCoins(0)
+          setTotalCoinsGenerated(0)
+          setCoinLineChart(DEFAULT_LINE_CHART)
+        }
+        return
+      }
+
+      try {
+        const recordsRef = collection(db, 'users', user.uid, 'energyRecords')
+        const snapshot = await getDocs(recordsRef)
+
+        let runningTotal = 0
+        const monthlyTotals = new Map<string, number>()
+
+        snapshot.forEach((docSnapshot) => {
+          const data = docSnapshot.data()
+          const coins = Number(data.coinValue) || 0
+          runningTotal += coins
+
+          const recordedAt = data.recordedAt?.toDate?.()
+            || data.timestamp?.toDate?.()
+            || new Date(data.recordedAtString || Date.now())
+
+          if (recordedAt instanceof Date && !Number.isNaN(recordedAt.valueOf())) {
+            const monthKey = `${recordedAt.getFullYear()}-${String(recordedAt.getMonth() + 1).padStart(2, '0')}`
+            monthlyTotals.set(monthKey, (monthlyTotals.get(monthKey) || 0) + coins)
+          }
+        })
+
+        if (isMounted) {
+          const roundedTotal = Math.round(runningTotal)
+          setAvailableCoins(roundedTotal)
+          setTotalCoinsGenerated(roundedTotal)
+
+          if (monthlyTotals.size > 0) {
+            const sortedKeys = Array.from(monthlyTotals.keys()).sort()
+            const recentKeys = sortedKeys.slice(-6)
+            const labels = recentKeys.map((key) => key.split('-')[1])
+            const datasetValues = recentKeys.map((key) => Math.round(monthlyTotals.get(key) || 0))
+
+            setCoinLineChart({
+              labels,
+              datasets: [{ data: datasetValues }],
+            })
+          } else {
+            setCoinLineChart(DEFAULT_LINE_CHART)
+          }
+        }
+      } catch (error) {
+        console.error('Error fetching coin data:', error)
+        if (isMounted) {
+          setAvailableCoins(0)
+          setTotalCoinsGenerated(0)
+          setCoinLineChart(DEFAULT_LINE_CHART)
+        }
+      }
+    }
+
+    fetchCoinData()
+
+    return () => {
+      isMounted = false
+    }
+  }, [user])
+
+  // Dummy data variables for Firebase integration
+  const dummyData = useMemo(() => ({
+    // this one is not implemented yet
+    usedThisMonth: 14738,
+    // fetch this by summing up all the coins from energy usage records 
+    availableCoins,
+
+    // energy usage not yet implemented
+    totalEnergyUse: 19456,
+    barChartData: {
+      labels: ['05', '06', '07', '08'],
+      datasets: [{ data: [30, 50, 90, 50] }]
+    },
+
+    // not yet implemented
+    monthlyAverage: 14738,
+    frequentlyUsedComponents: [
+      { name: 'Air Conditioner', pct: 0.9 },
+      { name: 'Printer', pct: 0.65 },
+      { name: 'PC', pct: 0.55 },
+    ],
+
+    // retrieve these data from the records, labels are months
+    totalCoinsGenerated,
+    lineChartData: coinLineChart,
+    renewableSources: [
+      { name: 'Solar panels', pct: 0.85 }, // get these info from "device" in energyRecords collection
+      { name: 'Wind turbine', pct: 0.6 },
+      { name: 'Generator', pct: 0.45 },
+    ]
+  }), [availableCoins, coinLineChart, totalCoinsGenerated])
+
   return (
     <ScrollView className="flex-1 bg-[#122119] px-6 w-full" contentContainerStyle={{ paddingBottom: 48 }}>
       {/* Header */}
@@ -25,7 +143,7 @@ export default function TrackEnergy() {
           <View className="flex-row items-center justify-between">
             {/* Left section */}
             <View className="flex-1 items-center">
-              <Text className="text-white text-2xl font-extrabold">14738 kWh</Text>
+              <Text className="text-white text-2xl font-extrabold">{dummyData.usedThisMonth} kWh</Text>
               <Text className="text-gray-300 text-sm mt-1">Used this month</Text>
             </View>
 
@@ -34,7 +152,7 @@ export default function TrackEnergy() {
 
             {/* Right section */}
             <View className="flex-1 items-center">
-              <Text className="text-white text-2xl font-extrabold">450 Coins</Text>
+              <Text className="text-white text-2xl font-extrabold">{dummyData.availableCoins} Coins</Text>
               <Text className="text-gray-300 text-sm mt-1">Available coins</Text>
             </View>
           </View>
@@ -49,7 +167,7 @@ export default function TrackEnergy() {
               className="bg-[#13f07a] px-4 py-3 rounded-full"
               style={{ width: BUTTON_WIDTH, alignItems: 'center' }}
             >
-              <Text className="text-black font-semibold">Add new record</Text>
+              <Text className="text-black font-semibold">Add coin</Text>
             </TouchableOpacity>
           </View>
         </View>
@@ -73,16 +191,13 @@ export default function TrackEnergy() {
       {/* Total Energy Use */}
       <View className="mb-6">
         <Text className="text-gray-300 text-sm">Total Energy Use</Text>
-        <Text className="text-white text-4xl font-extrabold mt-2">19456 kWh</Text>
+        <Text className="text-white text-4xl font-extrabold mt-2">{dummyData.totalEnergyUse} kWh</Text>
       </View>
 
       {/* Bar chart (react-native-chart-kit) */}
       <View className="mb-6">
         <BarChart
-          data={{
-            labels: ['05', '06', '07', '08'],
-            datasets: [{ data: [30, 50, 90, 50] }],
-          }}
+          data={dummyData.barChartData}
           width={Dimensions.get('window').width - 48} // padding compensation
           height={220}
           yAxisLabel=""
@@ -113,7 +228,7 @@ export default function TrackEnergy() {
       {/* Monthly Average */}
       <View className="mb-6">
         <Text className="text-gray-300 text-sm">Monthly Average</Text>
-        <Text className="text-white text-4xl font-extrabold mt-2">14738 kWh</Text>
+        <Text className="text-white text-4xl font-extrabold mt-2">{dummyData.monthlyAverage} kWh</Text>
       </View>
 
       {/* Most frequently used components */}
@@ -121,11 +236,7 @@ export default function TrackEnergy() {
         <Text className="text-white font-semibold mb-4">Most frequently used components</Text>
 
       
-        {[
-          { name: 'Air Conditioner', pct: 0.9 }, /*Replace pct with actual numbers when backend complete*/
-          { name: 'Printer', pct: 0.65 },
-          { name: 'PC', pct: 0.55 },
-        ].map((c) => (
+        {dummyData.frequentlyUsedComponents.map((c) => (
           <View key={c.name} className="flex-row items-center justify-between mb-4">
             <Text className="text-white text-base">{c.name}</Text>
             <View className="w-1/2 h-8 rounded-full border" style={{ borderColor: '#2b6b66', padding: 4 }}>
@@ -138,16 +249,13 @@ export default function TrackEnergy() {
       {/* Coins generated */}
       <View className="mb-6">
         <Text className="text-gray-300 text-sm">Total coins generated</Text>
-        <Text className="text-white text-4xl font-extrabold mt-2">250 Coins</Text>
+        <Text className="text-white text-4xl font-extrabold mt-2">{dummyData.totalCoinsGenerated} Coins</Text>
       </View>
 
       {/* Line chart (react-native-chart-kit) */}
       <View className="mb-6">
         <LineChart
-          data={{
-            labels: ['05', '06', '07', '08', '09', '10'],
-            datasets: [{ data: [34, 67, 55, 78, 76, 55] }], /*Replace with actual data when available*/
-          }}
+          data={dummyData.lineChartData}
           width={Dimensions.get('window').width - 48}
           height={180}
           yAxisLabel=""
@@ -170,11 +278,7 @@ export default function TrackEnergy() {
 
       {/* Renewable sources progress */}
       <View className="mb-10">
-        {[
-          { name: 'Solar panels', pct: 0.85 },
-          { name: 'Wind turbine', pct: 0.6 },
-          { name: 'Generator', pct: 0.45 },
-        ].map((r) => (
+        {dummyData.renewableSources.map((r) => (
           <View key={r.name} className="flex-row items-center justify-between mb-4">
             <Text className="text-white text-base">{r.name}</Text>
             <View className="w-1/2 h-8 rounded-full border" style={{ borderColor: '#2b6b66', padding: 4 }}>
