@@ -23,7 +23,7 @@ import * as Sharing from 'expo-sharing';
 import { Linking, ImageBackground, Platform } from 'react-native';
 import * as Print from 'expo-print';
 // Firebase
-import { collection, addDoc, serverTimestamp } from 'firebase/firestore';
+import { collection, addDoc, serverTimestamp, doc, updateDoc, increment, getDoc, writeBatch, arrayUnion } from 'firebase/firestore';
 import { db } from '../../config/firebaseConfig';
 import { useAuth } from '../../contexts/AuthContext';
 
@@ -55,6 +55,12 @@ const BillPayment = () => {
   const [isLoading, setIsLoading] = useState(false);
   const [showPaymentConfirmation, setShowPaymentConfirmation] = useState(false);
   const [showSuccessModal, setShowSuccessModal] = useState(false);
+  const [paymentDetails, setPaymentDetails] = useState({
+    amountPaid: 0,
+    remainingAmount: 0,
+    creditsUsed: 0,
+    billAmount: 0
+  });
   const [showCreditError, setShowCreditError] = useState(false);
   const [showLearnMore, setShowLearnMore] = useState(false);
   const [showReceipt, setShowReceipt] = useState(false);
@@ -70,7 +76,14 @@ const BillPayment = () => {
   );
 
   const ReceiptModal = () => {
-    const remainingAmount = billData.currentBill - amountToPay;
+    // Use the payment details from state, or calculate if not available
+    const displayPaymentDetails = paymentDetails.amountPaid > 0 ? paymentDetails : {
+      amountPaid: amountToPay,
+      remainingAmount: Math.max(0, billData.currentBill - amountToPay),
+      creditsUsed: creditsToUse,
+      billAmount: billData.currentBill
+    };
+    
     const transactionId = Math.random().toString(36).substring(2, 10).toUpperCase();
     const receiptDate = new Date().toLocaleDateString('en-US', {
       year: 'numeric',
@@ -113,10 +126,10 @@ const BillPayment = () => {
       <div class="row"><div class="muted">Provider</div><div>${params.provider || ''}</div></div>
       <div class="divider"></div>
       <div class="row"><div class="muted">Bill Amount</div><div>Rs.${billData.currentBill.toFixed(2)}</div></div>
-      <div class="row"><div class="muted">Credits Used</div><div class="accent">-${creditsToUse} (Rs.${amountToPay.toFixed(2)})</div></div>
-      <div class="row"><div class="muted">Remaining Amount</div><div>Rs.${remainingAmount.toFixed(2)}</div></div>
+      <div class="row"><div class="muted">Credits Used</div><div class="accent">${displayPaymentDetails.creditsUsed} (Rs.${displayPaymentDetails.amountPaid.toFixed(2)})</div></div>
+      <div class="row"><div class="muted">Remaining Amount</div><div>Rs.${displayPaymentDetails.remainingAmount.toFixed(2)}</div></div>
       <div class="divider"></div>
-      <div class="row"><div class="total">Total Paid</div><div class="total">Rs.${amountToPay.toFixed(2)}</div></div>
+      <div class="row"><div class="total">Total Paid</div><div class="total">Rs.${displayPaymentDetails.amountPaid.toFixed(2)}</div></div>
       <div class="row" style="margin-top:10px"><div class="muted">Payment Status</div><div class="badge">Completed</div></div>
       <div class="footer">Thank you for using GreenPulse!</div>
     </div>
@@ -181,10 +194,10 @@ const BillPayment = () => {
       <div class="row"><div class="muted">Provider</div><div>${params.provider || ''}</div></div>
       <div class="divider"></div>
       <div class="row"><div class="muted">Bill Amount</div><div>Rs.${billData.currentBill.toFixed(2)}</div></div>
-      <div class="row"><div class="muted">Credits Used</div><div class="accent">-${creditsToUse} (Rs.${amountToPay.toFixed(2)})</div></div>
-      <div class="row"><div class="muted">Remaining Amount</div><div>Rs.${(billData.currentBill - amountToPay).toFixed(2)}</div></div>
+      <div class="row"><div class="muted">Credits Used</div><div class="accent">${displayPaymentDetails.creditsUsed} (Rs.${displayPaymentDetails.amountPaid.toFixed(2)})</div></div>
+      <div class="row"><div class="muted">Remaining Amount</div><div>Rs.${displayPaymentDetails.remainingAmount.toFixed(2)}</div></div>
       <div class="divider"></div>
-      <div class="row"><div class="total">Total Paid</div><div class="total">Rs.${amountToPay.toFixed(2)}</div></div>
+      <div class="row"><div class="total">Total Paid</div><div class="total">Rs.${displayPaymentDetails.amountPaid.toFixed(2)}</div></div>
       <div class="row" style="margin-top:10px"><div class="muted">Payment Status</div><div class="badge">Completed</div></div>
       <div class="footer">Thank you for using GreenPulse!</div>
     </div>
@@ -290,11 +303,11 @@ const BillPayment = () => {
                     </View>
                     <View className="flex-row justify-between">
                       <Text className="text-gray-400">Credits Used</Text>
-                      <Text className="text-[#00ff88]">-{creditsToUse} (Rs.{amountToPay.toFixed(2)})</Text>
+                      <Text className="text-[#00ff88]">{displayPaymentDetails.creditsUsed} (Rs.{displayPaymentDetails.amountPaid.toFixed(2)})</Text>
                     </View>
                     <View className="flex-row justify-between">
                       <Text className="text-gray-400">Remaining Amount</Text>
-                      <Text className="text-white">Rs.{remainingAmount.toFixed(2)}</Text>
+                      <Text className="text-white">Rs.{displayPaymentDetails.remainingAmount.toFixed(2)}</Text>
                     </View>
                     
                     <View className="h-px bg-[#3a3a3a] my-2" />
@@ -302,7 +315,7 @@ const BillPayment = () => {
                     <View className="flex-row justify-between items-center">
                       <Text className="text-white text-lg font-bold">Total Paid</Text>
                       <Text className="text-white text-xl font-bold">
-                        Rs.{amountToPay.toFixed(2)}
+                        Rs.{displayPaymentDetails.amountPaid.toFixed(2)}
                       </Text>
                     </View>
                   </View>
@@ -621,13 +634,126 @@ const BillPayment = () => {
   const confirmPayment = async () => {
     setShowPaymentConfirmation(false);
     setIsLoading(true);
-    // Simulate payment processing
-    setTimeout(() => {
-      setIsLoading(false);
+    
+    try {
+      if (!user) {
+        throw new Error('User not authenticated');
+      }
+      
+      // Get current credits
+      const creditsRef = doc(db, 'totalCredits', user.uid);
+      const creditsDoc = await getDoc(creditsRef);
+      
+      if (!creditsDoc.exists()) {
+        throw new Error('User credits not found');
+      }
+      
+      const currentCredits = creditsDoc.data().totalReceived || 0;
+      const creditsToDeduct = creditsToUse;
+      
+      if (currentCredits < creditsToDeduct) {
+        throw new Error('Insufficient credits');
+      }
+      
+      // Create a batch to perform multiple writes atomically
+      const batch = writeBatch(db);
+      
+      // 1. Update user's credits
+      batch.update(creditsRef, {
+        totalReceived: increment(-creditsToDeduct),
+        lastUpdated: serverTimestamp()
+      });
+      
+      // Calculate the actual remaining amount after payment
+      const actualRemaining = Math.max(0, billData.currentBill - amountToPay);
+      
+      // 2. Create a new payment record
+      const paymentData = {
+        userId: user.uid,
+        accountNumber: params.accountNumber || '',
+        accountNickname: params.accountNickname || '',
+        provider: params.provider || '',
+        billAmount: billData.currentBill,
+        creditsUsed: creditsToUse,
+        amountPaid: amountToPay,
+        remainingAmount: actualRemaining,
+        status: 'completed',
+        paymentDate: serverTimestamp(),
+        billMonth: new Date().toISOString().slice(0, 7), // YYYY-MM format
+        ocrData: ocrResult || null
+      };
+      
+      // Add the payment to the 'payments' collection
+      const paymentRef = doc(collection(db, 'payments'));
+      batch.set(paymentRef, paymentData);
+      
+      // 3. Update user's payment history
+      const userRef = doc(db, 'users', user.uid);
+      const paymentHistoryEntry = {
+        paymentId: paymentRef.id,
+        amount: amountToPay,
+        date: new Date().toISOString(), // Use client-side timestamp
+        billAmount: billData.currentBill,
+        status: 'completed'
+      };
+      
+      // First, check if user document exists
+      const userDoc = await getDoc(userRef);
+      
+      if (userDoc.exists()) {
+        // Update existing user document with new payment history
+        batch.update(userRef, {
+          paymentHistory: arrayUnion(paymentHistoryEntry),
+          lastUpdated: serverTimestamp()
+        });
+      } else {
+        // Create new user document with initial payment history
+        batch.set(userRef, {
+          uid: user.uid,
+          email: user.email || '',
+          paymentHistory: [paymentHistoryEntry],
+          createdAt: serverTimestamp(),
+          lastUpdated: serverTimestamp()
+        });
+      }
+      
+      // Commit the batch
+      await batch.commit();
+      
+      // Update local state with the remaining amount as the new current bill
+      setPaymentDetails({
+        amountPaid: amountToPay,
+        remainingAmount: actualRemaining,
+        creditsUsed: creditsToUse,
+        billAmount: actualRemaining // Update bill amount to remaining amount
+      });
+      
+      // Update the current bill input with the remaining amount
+      setCurrentBillInput(actualRemaining > 0 ? actualRemaining.toString() : "");
+      
+      // Update billData with the remaining amount as the new current bill
+      setBillData(prev => ({
+        ...prev,
+        currentBill: actualRemaining
+      }));
+      
+      console.log('Payment processed successfully:', {
+        paymentId: paymentRef.id,
+        billAmount: billData.currentBill,
+        amountPaid: amountToPay,
+        remainingAmount: actualRemaining,
+        creditsUsed: creditsToUse,
+        newCurrentBill: actualRemaining
+      });
       setCredits(remainingCredits);
-      setCreditsToUse(0); // Reset credits to use to 0
+      setCreditsToUse(0);
       setShowSuccessModal(true);
-    }, 2000);
+    } catch (error) {
+      console.error('Error processing payment:', error);
+      Alert.alert('Error', 'Failed to process payment. Please try again.');
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   return (
@@ -740,43 +866,53 @@ const BillPayment = () => {
             <View>
               <Text className="text-white text-sm mb-1">Credit Available</Text>
               <Text className="text-[#00ff88] text-xl font-bold">
-                Rs.{credits * creditAmount}
+                Rs.{(credits * creditAmount).toFixed(2)}
               </Text>
             </View>
 
-            {/* Credit Conversion Rate */}
+            {/* Credit Conversion Rate - Only show when bill amount is entered */}
             <View className="pt-3 border-t border-[#4a6a5a]">
-              <View className="flex-row justify-between items-center mb-2">
-                <Text className="text-white text-sm">
-                  Credit Conversion rate
-                </Text>
-                <View className="bg-[#00ff88] px-3 py-1 rounded-full">
-                  <Text className="text-black font-bold">
-                    {(
-                      (100 / billData.currentBill) *
-                      credits *
-                      creditAmount
-                    ).toFixed(2)}
-                    %
-                  </Text>
-                </View>
-              </View>
+              {billData.currentBill > 0 ? (
+                <>
+                  <View className="flex-row justify-between items-center mb-2">
+                    <Text className="text-white text-sm">
+                      Credit Conversion rate
+                    </Text>
+                    <View className="bg-[#00ff88] px-3 py-1 rounded-full">
+                      <Text className="text-black font-bold">
+                        {(
+                          (100 / billData.currentBill) *
+                          credits *
+                          creditAmount
+                        ).toFixed(2)}%
+                      </Text>
+                    </View>
+                  </View>
 
-              {/* Static Progress Bar kept as-is */}
-              <View className="mt-2">
-                <View className="bg-[#2a4a3a] h-2 rounded-full overflow-hidden">
-                  <View
-                    className={`h-full rounded-full ${(100 / billData.currentBill) * credits * creditAmount >= 100 ? "bg-[#00ff88]" : "bg-[#ff4d4d]"}`}
-                    style={{
-                      width: `${Math.min(100, (100 / billData.currentBill) * credits * creditAmount)}%`,
-                    }}
-                  />
-                </View>
-                <View className="flex-row justify-between mt-1">
-                  <Text className="text-gray-400 text-xs">0%</Text>
-                  <Text className="text-gray-400 text-xs">100%</Text>
-                </View>
-              </View>
+                  <View className="mt-2">
+                    <View className="bg-[#2a4a3a] h-2 rounded-full overflow-hidden">
+                      <View
+                        className={`h-full rounded-full ${
+                          (100 / billData.currentBill) * credits * creditAmount >= 100 
+                            ? "bg-[#00ff88]" 
+                            : "bg-[#ff4d4d]"
+                        }`}
+                        style={{
+                          width: `${Math.min(100, (100 / billData.currentBill) * credits * creditAmount)}%`,
+                        }}
+                      />
+                    </View>
+                  </View>
+                  <View className="flex-row justify-between mt-1">
+                    <Text className="text-gray-400 text-xs">0%</Text>
+                    <Text className="text-gray-400 text-xs">100%</Text>
+                  </View>
+                </>
+              ) : (
+                <Text className="text-gray-400 text-sm">
+                  Enter bill amount to see credit conversion
+                </Text>
+              )}
             </View>
           </View>
         </View>
@@ -972,22 +1108,22 @@ const BillPayment = () => {
               <View className="flex-row justify-between py-2 border-b border-[#2a4444]">
                 <Text className="text-gray-300">Credits Used</Text>
                 <Text className="text-[#00ff88] font-semibold">
-                  {creditsToUse} (Rs.{amountToPay.toFixed(2)})
+                  {paymentDetails.creditsUsed || creditsToUse} (Rs.{(paymentDetails.amountPaid || amountToPay).toFixed(2)})
                 </Text>
               </View>
 
-              {remainingAmount > 0 ? (
+              {billData.currentBill - amountToPay > 0 ? (
                 <View className="flex-row justify-between py-2">
                   <Text className="text-gray-300">Remaining to Pay</Text>
                   <Text className="text-[#ffaa00] font-semibold">
-                    Rs.{remainingAmount.toFixed(2)}
+                    Rs.{(billData.currentBill - amountToPay).toFixed(2)}
                   </Text>
                 </View>
               ) : (
                 <View className="flex-row justify-between py-2">
                   <Text className="text-gray-300">Surplus Amount</Text>
                   <Text className="text-[#00ff88] font-semibold">
-                    Rs.{Math.abs(remainingAmount).toFixed(2)}
+                    Rs.{Math.abs(billData.currentBill - amountToPay).toFixed(2)}
                   </Text>
                 </View>
               )}
@@ -1003,7 +1139,7 @@ const BillPayment = () => {
 
               <TouchableOpacity
                 className={`py-4 px-6 rounded-xl ${isLoading || showAccountMismatch ? 'bg-[#00ff88]/50' : 'bg-[#00ff88]'}`}
-                onPress={handlePayNow}
+                onPress={confirmPayment}
                 disabled={isLoading || showAccountMismatch}
               >
                 {isLoading ? (
@@ -1047,13 +1183,13 @@ const BillPayment = () => {
                 <View className="flex-row justify-between mb-2">
                   <Text className="text-gray-400">Amount Paid</Text>
                   <Text className="text-white font-semibold">
-                    LKR {amountToPay.toFixed(2)}
+                    LKR {paymentDetails.amountPaid.toFixed(2)}
                   </Text>
                 </View>
                 <View className="flex-row justify-between">
                   <Text className="text-gray-400">Remaining to Pay</Text>
                   <Text className="text-white font-semibold">
-                    Rs.{remainingAmount.toFixed(2)}
+                    Rs.{paymentDetails.remainingAmount.toFixed(2)}
                   </Text>
                 </View>
               </View>
