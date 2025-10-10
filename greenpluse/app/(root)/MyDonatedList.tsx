@@ -1,51 +1,89 @@
-import React from 'react';
-import { View, Text, TouchableOpacity, ScrollView, Image, StatusBar } from 'react-native';
+import React, { useState, useEffect } from 'react';
+import { View, Text, TouchableOpacity, ScrollView, Image, StatusBar, ActivityIndicator } from 'react-native';
 import { ArrowLeft } from 'lucide-react-native';
 import { useRouter } from 'expo-router';
+import { db, auth } from '@/config/firebaseConfig';
+import { collection, query, where, getDocs, orderBy } from 'firebase/firestore';
 
 type CertificateStatus = 'Pending' | 'Available';
 
 interface DonationType {
-  id: number;
+  id: string;
   title: string;
   amount: number;
   date: string;
   image: string;
   certificateStatus: CertificateStatus;
+  projectId: string;
+  timestamp?: number;
 }
 
 const MyDonatedList = () => {
   const router = useRouter();
+  const [donations, setDonations] = useState<DonationType[]>([]);
+  const [loading, setLoading] = useState(true);
 
-  // Mock data - replace with API call in future
-  const donations: DonationType[] = [
-    {
-      id: 1,
-      title: 'Solar Panel Installation in Rural Village',
-      amount: 500,
-      date: '2024-03-15 10:30 AM',
-      image: 'https://images.unsplash.com/photo-1509391366360-2e959784a276?w=400',
-      certificateStatus: 'Pending'
-    },
-    {
-      id: 2,
-      title: 'Community Battery Storage System',
-      amount: 200,
-      date: '2024-01-10 09:15 AM',
-      image: 'https://images.unsplash.com/photo-1614531341773-3bff8b7cb3fc?w=400',
-      certificateStatus: 'Available'
-    },
-    {
-      id: 3,
-      title: 'Electric Vehicle Charging Stations',
-      amount: 400,
-      date: '2023-12-05 04:00 PM',
-      image: 'https://images.unsplash.com/photo-1593941707882-a5bba14938c7?w=400',
-      certificateStatus: 'Available'
+  useEffect(() => {
+    fetchUserDonations();
+  }, []);
+
+  const fetchUserDonations = async () => {
+    try {
+      const user = auth.currentUser;
+      if (!user) {
+        console.log('No user logged in');
+        setLoading(false);
+        return;
+      }
+
+      // Query donations collection for current user
+      const donationsRef = collection(db, 'donations');
+      const q = query(
+        donationsRef,
+        where('userId', '==', user.uid)
+      );
+
+      const querySnapshot = await getDocs(q);
+      const fetchedDonations: DonationType[] = [];
+
+      querySnapshot.forEach((doc) => {
+        const data = doc.data();
+        fetchedDonations.push({
+          id: doc.id,
+          title: data.projectTitle || 'Untitled Project',
+          amount: data.amount || 0,
+          date: data.donatedAt?.toDate?.()?.toLocaleString() || 'Recent',
+          image: 'https://images.unsplash.com/photo-1509391366360-2e959784a276?w=400',
+          certificateStatus: 'Available',
+          projectId: data.projectId,
+          timestamp: data.donatedAt?.toDate?.()?.getTime() || 0
+        });
+      });
+
+      // Sort by date descending (newest first)
+      fetchedDonations.sort((a, b) => (b.timestamp || 0) - (a.timestamp || 0));
+
+      setDonations(fetchedDonations);
+    } catch (error) {
+      console.error('Error fetching donations:', error);
+      // Fallback to mock data
+      setDonations([
+        {
+          id: '1',
+          title: 'Solar Panel Installation in Rural Village',
+          amount: 500,
+          date: '2024-03-15 10:30 AM',
+          image: 'https://images.unsplash.com/photo-1509391366360-2e959784a276?w=400',
+          certificateStatus: 'Pending',
+          projectId: 'mock1'
+        }
+      ]);
+    } finally {
+      setLoading(false);
     }
-  ];
+  };
 
-  const handleViewCertificate = (donationId: number) => {
+  const handleViewCertificate = (donationId: string) => {
     // Navigate to certificate view
     router.push({
       pathname: '/(root)/Certificate',
@@ -56,31 +94,8 @@ const MyDonatedList = () => {
   return (
     <>
       <StatusBar barStyle="light-content" backgroundColor="#1a1a1a" />
-      <View style={{ flex: 1, backgroundColor: '#1a1a1a' }}>
-        {/* Header */}
-        <View style={{
-          flexDirection: 'row',
-          alignItems: 'center',
-          paddingHorizontal: 20,
-          paddingTop: 48,
-          paddingBottom: 16,
-          backgroundColor: '#1a1a1a'
-        }}>
-          <TouchableOpacity 
-            style={{ marginRight: 16 }}
-            onPress={() => router.back()}
-          >
-            <ArrowLeft size={28} color="white" />
-          </TouchableOpacity>
-          <Text style={{ 
-            color: 'white', 
-            fontSize: 24, 
-            fontWeight: '700', 
-            flex: 1 
-          }}>
-            My Donations
-          </Text>
-        </View>
+      <View style={{ flex: 1, backgroundColor: '#122119' }}>
+        
 
         {/* Donations List */}
         <ScrollView
@@ -88,7 +103,12 @@ const MyDonatedList = () => {
           contentContainerStyle={{ paddingHorizontal: 20, paddingTop: 20, paddingBottom: 100 }}
           showsVerticalScrollIndicator={false}
         >
-          {donations.map((donation) => (
+          {loading ? (
+            <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', paddingVertical: 60 }}>
+              <ActivityIndicator size="large" color="#10b981" />
+              <Text style={{ color: '#6b7280', fontSize: 14, marginTop: 12 }}>Loading your donations...</Text>
+            </View>
+          ) : donations.map((donation) => (
             <View
               key={donation.id}
               style={{
@@ -207,7 +227,7 @@ const MyDonatedList = () => {
               shadowOpacity: 0.3,
               shadowRadius: 8
             }}
-            onPress={() => router.push('/(root)/RequestProject' as any)}
+            onPress={() => router.push('/project' as any)}
             activeOpacity={0.9}
           >
             <Text style={{
@@ -215,7 +235,7 @@ const MyDonatedList = () => {
               fontSize: 18,
               fontWeight: '700'
             }}>
-              Request New Project
+              Donate More
             </Text>
           </TouchableOpacity>
         </View>

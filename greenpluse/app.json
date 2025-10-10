@@ -40,6 +40,14 @@
             "backgroundColor": "#000000"
           }
         }
+      ],
+      [
+        "expo-media-library",
+        {
+          "photosPermission": "Allow GreenPulse to save your NFT certificates to your photo library.",
+          "savePhotosPermission": "Allow GreenPulse to save your NFT certificates.",
+          "isAccessMediaLocationEnabled": true
+        }
       ]
     ],
     "experiments": {

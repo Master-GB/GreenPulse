@@ -1,7 +1,9 @@
 import React from 'react';
-import { View, Text, TouchableOpacity, ScrollView, StatusBar } from 'react-native';
-import { ArrowLeft, Sun, DollarSign, MapPin, Award, Folder, Users } from 'lucide-react-native';
+import { View, Text, TouchableOpacity, ScrollView, StatusBar, Image } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
+import { ArrowLeft, Sun, DollarSign, MapPin, Award, Folder, Users, Settings } from 'lucide-react-native';
 import { useRouter } from 'expo-router';
+import { icons } from '@/constants/icons';
 
 const ProjectsSetting = () => {
   const router = useRouter();
@@ -49,11 +51,17 @@ const ProjectsSetting = () => {
     {
       id: 4,
       icon: Award,
-      title: 'My Certificates',
-      subtitle: 'Your sustainability achievements',
+      title: 'My NFT Certificates',
+      subtitle: 'View your blockchain NFT certificates',
       gradient: 'from-amber-500 to-orange-600',
       bgColor: '#F59E0B',
-      onPress: () => console.log('My Certificates')
+      onPress: () => {
+        try {
+          router.push('/nft-gallery' as any);
+        } catch (error) {
+          console.error('Navigation error:', error);
+        }
+      }
     },
     {
       id: 5,
@@ -73,40 +81,57 @@ const ProjectsSetting = () => {
     {
       id: 6,
       icon: Users,
-      title: 'Contribution',
-      subtitle: 'Community impact dashboard',
+      title: 'Grid Contribution',
+      subtitle: 'Share energy back to the grid',
       gradient: 'from-rose-500 to-red-600',
       bgColor: '#EF4444',
-      onPress: () => console.log('Contribution')
+      onPress: () => {
+        try {
+          router.push('/contribution' as any);
+        } catch (error) {
+          console.error('Navigation error:', error);
+        }
+      }
+    },
+    {
+      id: 7,
+      icon: Settings,
+      title: 'Update Project Status',
+      subtitle: 'Change project approval status',
+      gradient: 'from-indigo-500 to-purple-600',
+      bgColor: '#6366F1',
+      onPress: () => {
+        try {
+          router.push('/UpdateProjectStatus' as any);
+        } catch (error) {
+          console.error('Navigation error:', error);
+        }
+      }
     }
   ];
 
   return (
-    <>
-      <StatusBar barStyle="light-content" backgroundColor="#0a0a0a" />
-      <View style={{ flex: 1, backgroundColor: '#0a0a0a' }}>
-       
+    <SafeAreaView className="flex-1 bg-[#122119]" edges={['bottom']}>
+      <StatusBar barStyle="light-content" />
 
-        {/* Enhanced Menu Items */}
-        <ScrollView 
-          style={{ flex: 1 }}
-          contentContainerStyle={{ paddingHorizontal: 20, paddingBottom: 24 }}
-          showsVerticalScrollIndicator={false}
-        >
+      {/* Enhanced Menu Items */}
+      <ScrollView 
+        className="flex-1"
+        contentContainerStyle={{ paddingHorizontal: 10, paddingBottom: 20 }}
+        showsVerticalScrollIndicator={false}
+      >
           {menuItems.map((item, index) => {
             const IconComponent = item.icon;
             return (
               <TouchableOpacity
                 key={item.id}
                 style={{
-                  backgroundColor: '#171717',
+                  backgroundColor: '#2a3e3e',
                   borderRadius: 20,
                   padding: 20,
                   marginBottom: 16,
                   flexDirection: 'row',
                   alignItems: 'center',
-                  borderWidth: 1.5,
-                  borderColor: '#262626',
                   shadowColor: item.bgColor,
                   shadowOffset: { width: 0, height: 4 },
                   shadowOpacity: 0.3,
@@ -170,7 +195,7 @@ const ProjectsSetting = () => {
                   width: 32,
                   height: 32,
                   borderRadius: 10,
-                  backgroundColor: '#262626',
+                  backgroundColor: '#122119',
                   justifyContent: 'center',
                   alignItems: 'center'
                 }}>
@@ -182,12 +207,10 @@ const ProjectsSetting = () => {
 
           {/* Stats Card */}
           <View style={{
-            backgroundColor: '#171717',
+            backgroundColor: '#2a3e3e',
             borderRadius: 20,
             padding: 24,
-            marginTop: 8,
-            borderWidth: 1.5,
-            borderColor: '#262626'
+            marginTop: 8
           }}>
             <Text style={{
               color: 'white',
@@ -199,22 +222,21 @@ const ProjectsSetting = () => {
             </Text>
             <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
               <View style={{ alignItems: 'center' }}>
-                <Text style={{ color: '#16A34A', fontSize: 24, fontWeight: '800' }}>12</Text>
-                <Text style={{ color: '#737373', fontSize: 12, marginTop: 4 }}>Projects</Text>
+                <Text style={{ color: '#1AE57D', fontSize: 24, fontWeight: '800' }}>12</Text>
+                <Text style={{ color: '#9ca3af', fontSize: 12, marginTop: 4 }}>Projects</Text>
               </View>
               <View style={{ alignItems: 'center' }}>
-                <Text style={{ color: '#3B82F6', fontSize: 24, fontWeight: '800' }}>$2.4K</Text>
-                <Text style={{ color: '#737373', fontSize: 12, marginTop: 4 }}>Donated</Text>
+                <Text style={{ color: '#1AE57D', fontSize: 24, fontWeight: '800' }}>$2.4K</Text>
+                <Text style={{ color: '#9ca3af', fontSize: 12, marginTop: 4 }}>Donated</Text>
               </View>
               <View style={{ alignItems: 'center' }}>
-                <Text style={{ color: '#F59E0B', fontSize: 24, fontWeight: '800' }}>8</Text>
-                <Text style={{ color: '#737373', fontSize: 12, marginTop: 4 }}>Certificates</Text>
+                <Text style={{ color: '#1AE57D', fontSize: 24, fontWeight: '800' }}>8</Text>
+                <Text style={{ color: '#9ca3af', fontSize: 12, marginTop: 4 }}>Certificates</Text>
               </View>
             </View>
           </View>
         </ScrollView>
-      </View>
-    </>
+    </SafeAreaView>
   );
 };
 

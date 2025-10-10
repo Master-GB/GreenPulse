@@ -1,12 +1,162 @@
-import React from 'react';
-import { View, Text, Image, TouchableOpacity, ScrollView } from 'react-native';
+import React, { useEffect, useState } from 'react';
+import { View, Text, Image, TouchableOpacity, ScrollView, ActivityIndicator } from 'react-native';
+import { useLocalSearchParams, useRouter } from 'expo-router';
+import { db } from '@/config/firebaseConfig';
+import { collection, query, where, getDocs } from 'firebase/firestore';
+
+type ProjectStatus = 'Published' | 'Funded' | 'In Progress' | 'Completed' | 'Approved';
+type FilterCategory = 'All' | 'Solar' | 'Wind' | 'Hydro';
+
+interface ProjectType {
+  id: number;
+  docId?: string;
+  status: ProjectStatus;
+  title: string;
+  description: string;
+  image: string;
+  category: FilterCategory;
+  fundingGoal?: number;
+  currentFunding?: number;
+  actualAmount?: number;
+  location?: string;
+  startDate?: string;
+  endDate?: string;
+  donors?: number;
+}
 
 const ProjectDetails = () => {
+  const { id } = useLocalSearchParams();
+  const router = useRouter();
+  const [project, setProject] = useState<ProjectType | null>(null);
+  const [loading, setLoading] = useState(true);
+
   const donors = [
     { id: 1, image: 'https://i.pravatar.cc/150?img=1' },
     { id: 2, image: 'https://i.pravatar.cc/150?img=2' },
     { id: 3, image: 'https://i.pravatar.cc/150?img=3' }
   ];
+
+  const handleDonatePress = () => {
+    if (project) {
+      router.push({
+        pathname: '/(root)/PaymentPage',
+        params: {
+          projectId: project.docId,
+          projectTitle: project.title,
+          currentAmount: fundingAmount.toString(),
+          goalAmount: fundingGoal.toString()
+        }
+      } as any);
+    }
+  };
+
+  useEffect(() => {
+    fetchProjectDetails();
+  }, [id]);
+
+  const fetchProjectDetails = async () => {
+    try {
+      // Fetch all approved projects from Firebase
+      const projectsRef = collection(db, 'projectRequests');
+      const q = query(projectsRef, where('status', '==', 'Approved'));
+      
+      const querySnapshot = await getDocs(q);
+      let foundProject: ProjectType | null = null;
+      
+      querySnapshot.forEach((doc) => {
+        const projectId = parseInt(doc.id.slice(-6), 36);
+        
+        // Match the project by ID
+        if (projectId === parseInt(id as string)) {
+          const data = doc.data();
+          
+          // Map energy system to category
+          let category: FilterCategory = 'All';
+          if (data.energySystem === 'Solar Panel') category = 'Solar';
+          else if (data.energySystem === 'Wind Turbine') category = 'Wind';
+          else if (data.energySystem === 'Hydroelectric') category = 'Hydro';
+          
+          foundProject = {
+            id: projectId,
+            docId: doc.id,
+            status: 'Approved',
+            title: data.projectTitle || 'Untitled Project',
+            description: data.projectDescription || 'No description available',
+            image: category === 'Solar' 
+              ? 'https://images.unsplash.com/photo-1509391366360-2e959784a276?w=400&h=300&fit=crop'
+              : category === 'Wind'
+              ? 'https://images.unsplash.com/photo-1532601224476-15c79f2f7a51?w=400&h=300&fit=crop'
+              : 'https://images.unsplash.com/photo-1473341304170-971dccb5ac1e?w=400&h=300&fit=crop',
+            category,
+            fundingGoal: data.fundingGoal || 50000,
+            currentFunding: data.currentFunding || 0,
+            actualAmount: data.actualAmount || data.currentFunding || 0,
+            location: data.location || '',
+          };
+        }
+      });
+      
+      if (foundProject) {
+        setProject(foundProject);
+      }
+    } catch (error) {
+      console.error('Error fetching project details:', error);
+      // Fallback to mock data
+      const mockProject: ProjectType = {
+        id: 3,
+        status: 'Approved',
+        title: 'Hydroelectric Dam Upgrade',
+        description:
+          'Contribute to upgrading an existing hydroelectric dam to increase efficiency and provide more clean energy to the region.',
+        image: 'https://images.unsplash.com/photo-1473341304170-971dccb5ac1e?w=400&h=300&fit=crop',
+        category: 'Hydro',
+        fundingGoal: 50000,
+        currentFunding: 32000,
+        actualAmount: 35000,
+      };
+      setProject(mockProject);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const getStatusColor = (status: ProjectStatus) => {
+    switch (status) {
+      case 'Published':
+        return '#9ca3af';
+      case 'Funded':
+        return '#10b981';
+      case 'In Progress':
+        return '#f59e0b';
+      case 'Completed':
+        return '#3b82f6';
+      case 'Approved':
+        return '#22c55e';
+      default:
+        return '#9ca3af';
+    }
+  };
+
+  if (loading) {
+    return (
+      <View style={{ flex: 1, backgroundColor: '#122119', justifyContent: 'center', alignItems: 'center' }}>
+        <ActivityIndicator size="large" color="#1AE57D" />
+      </View>
+    );
+  }
+
+  if (!project) {
+    return (
+      <View style={{ flex: 1, backgroundColor: '#122119', justifyContent: 'center', alignItems: 'center' }}>
+        <Text style={{ color: 'white', fontSize: 18 }}>Project not found</Text>
+      </View>
+    );
+  }
+
+  const fundingAmount = project.actualAmount || project.currentFunding || 0;
+  const fundingGoal = project.fundingGoal || 0;
+  const fundingPercentage = fundingGoal > 0 ? (fundingAmount / fundingGoal) * 100 : 0;
+  const isFullyFunded = fundingAmount >= fundingGoal;
 
   return (
     <ScrollView
@@ -17,7 +167,7 @@ const ProjectDetails = () => {
       {/* Hero Image */}
       <View style={{ paddingHorizontal: 20, marginBottom: 20 }}>
         <Image
-          source={{ uri: 'https://images.unsplash.com/photo-1509391366360-2e959784a276?w=800' }}
+          source={{ uri: project.image }}
           style={{
             width: '100%',
             height: 280,
@@ -37,7 +187,7 @@ const ProjectDetails = () => {
           marginBottom: 12,
           lineHeight: 32
         }}>
-          Solar Power for Rural School
+          {project.title}
         </Text>
         <Text style={{
           color: '#9ca3af',
@@ -45,7 +195,7 @@ const ProjectDetails = () => {
           lineHeight: 24,
           marginBottom: 16
         }}>
-          This project aims to install solar panels at a rural school, providing a sustainable energy source for lighting and educational resources.
+          {project.description}
         </Text>
         <Text style={{
           color: '#d1d5db',
@@ -53,17 +203,17 @@ const ProjectDetails = () => {
           fontWeight: '600',
           marginBottom: 12
         }}>
-          Solar Panel Installation
+          {project.category} Energy Project
         </Text>
         <View style={{
-          backgroundColor: '#16A34A',
+          backgroundColor: getStatusColor(project.status),
           paddingHorizontal: 20,
           paddingVertical: 10,
           borderRadius: 12,
           alignSelf: 'flex-start'
         }}>
           <Text style={{ color: 'white', fontSize: 15, fontWeight: '600' }}>
-            In Progress
+            {project.status}
           </Text>
         </View>
       </View>
@@ -77,7 +227,7 @@ const ProjectDetails = () => {
       }}>
         <View style={{ flex: 1 }}>
           <Image
-            source={{ uri: 'https://images.unsplash.com/photo-1509391366360-2e959784a276?w=400' }}
+            source={{ uri: project.image }}
             style={{
               width: '100%',
               height: 180,
@@ -88,7 +238,7 @@ const ProjectDetails = () => {
             resizeMode="cover"
           />
           <Text style={{ color: 'white', fontSize: 16, fontWeight: '600' }}>
-            Solar Panel Installation
+            {project.category} Installation
           </Text>
         </View>
         <View style={{ flex: 1 }}>
@@ -118,7 +268,7 @@ const ProjectDetails = () => {
             }} />
           </View>
           <Text style={{ color: 'white', fontSize: 16, fontWeight: '600' }}>
-            Students Benefits
+            Community Benefits
           </Text>
         </View>
       </View>
@@ -138,7 +288,7 @@ const ProjectDetails = () => {
           fontSize: 16,
           marginBottom: 12
         }}>
-          7,500 / 10,000 Coins
+          LKR {fundingAmount.toLocaleString()} / {fundingGoal.toLocaleString()} Credits
         </Text>
         <View style={{
           width: '100%',
@@ -148,18 +298,25 @@ const ProjectDetails = () => {
           overflow: 'hidden'
         }}>
           <View style={{
-            width: '75%',
+            width: `${fundingPercentage}%`,
             height: '100%',
-            backgroundColor: '#10b981',
+            backgroundColor: '#1AE57D',
             borderRadius: 6
           }} />
         </View>
+        <Text style={{
+          color: isFullyFunded ? '#22c55e' : '#1AE57D',
+          fontSize: 14,
+          fontWeight: '600',
+          marginTop: 8
+        }}>
+          {fundingPercentage >= 100 ? '100% Funded - Goal Reached! 🎉' : `${fundingPercentage.toFixed(1)}% Funded`}
+        </Text>
       </View>
       
       {/* Top Donors */}
       <View style={{ paddingHorizontal: 20, marginBottom: 32 }}>
         <Text style={{
-          color: 'white',
           fontSize: 20,
           fontWeight: '700',
           marginBottom: 16
@@ -206,28 +363,55 @@ const ProjectDetails = () => {
       
       {/* Donate Button */}
       <View style={{ paddingHorizontal: 20, marginBottom: 24 }}>
-        <TouchableOpacity
-          style={{
-            backgroundColor: '#10b981',
+        {isFullyFunded ? (
+          <View style={{
+            backgroundColor: '#2a3e3e',
             paddingVertical: 18,
             borderRadius: 16,
             alignItems: 'center',
-            elevation: 4,
-            shadowColor: '#10b981',
-            shadowOffset: { width: 0, height: 4 },
-            shadowOpacity: 0.3,
-            shadowRadius: 8
-          }}
-          activeOpacity={0.9}
-        >
-          <Text style={{
-            color: 'white',
-            fontSize: 18,
-            fontWeight: '700'
+            borderWidth: 2,
+            borderColor: '#22c55e'
           }}>
-            Donate Now
-          </Text>
-        </TouchableOpacity>
+            <Text style={{
+              color: '#22c55e',
+              fontSize: 18,
+              fontWeight: '700',
+              marginBottom: 4
+            }}>
+              ✓ Fully Funded
+            </Text>
+            <Text style={{
+              color: '#9ca3af',
+              fontSize: 14
+            }}>
+              This project has reached its funding goal
+            </Text>
+          </View>
+        ) : (
+          <TouchableOpacity
+            style={{
+              backgroundColor: '#1AE57D',
+              paddingVertical: 18,
+              borderRadius: 16,
+              alignItems: 'center',
+              elevation: 4,
+              shadowColor: '#1AE57D',
+              shadowOffset: { width: 0, height: 4 },
+              shadowOpacity: 0.3,
+              shadowRadius: 8
+            }}
+            onPress={handleDonatePress}
+            activeOpacity={0.9}
+          >
+            <Text style={{
+              color: 'black',
+              fontSize: 18,
+              fontWeight: '700'
+            }}>
+              Donate Now
+            </Text>
+          </TouchableOpacity>
+        )}
       </View>
       
       {/* Bottom Message */}
