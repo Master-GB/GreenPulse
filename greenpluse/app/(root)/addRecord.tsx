@@ -18,6 +18,12 @@ import logoicon from "../../assets/images/GreenPluseLogo.png";
 import camImage from "../../assets/images/camerascanner2.png";
 import DateTimePicker from "@react-native-community/datetimepicker"; // <-- Import the date picker
 
+// --- OCR Imports ---
+import * as ImagePicker from "expo-image-picker";
+import * as DocumentPicker from "expo-document-picker";
+import * as FileSystem from "expo-file-system/legacy";
+import * as ImageManipulator from "expo-image-manipulator";
+
 // --- Firebase Imports ---
 import { db } from "../../config/firebaseConfig";
 import { collection, addDoc, serverTimestamp } from "firebase/firestore";
@@ -48,6 +54,11 @@ const AddRecord = () => {
   const [dateTime, setDateTime] = useState(new Date()); // Use Date object
   const [showDatePicker, setShowDatePicker] = useState(false);
   // ------------------------------------------
+
+  // --- OCR State ---
+  const [ocrResult, setOcrResult] = useState<{amount?: number}>({});
+  const [showOcrResult, setShowOcrResult] = useState(false);
+  const [isOcrLoading, setIsOcrLoading] = useState(false);
 
   const handleSaveRecord = async () => {
     if (!user) {
@@ -141,11 +152,170 @@ const AddRecord = () => {
   // -------------------------------
 
   const handleUseScanner = () => {
-    Alert.alert("Scanner", "OCR Scanner will be implemented");
+    Alert.alert(
+      "Choose Source",
+      "Select how you'd like to scan your document",
+      [
+        { text: "Camera", onPress: handleOpenCamera },
+        { text: "Document Picker", onPress: handlePickDocument },
+        { text: "Cancel", style: "cancel" }
+      ]
+    );
   };
 
   const handleAttachImage = () => {
     Alert.alert("Attach Image", "Image picker will be implemented");
+  };
+
+  // --- OCR Functions ---
+  const parseOcrText = (text: string) => {
+    // Extract the first number found in the text (for kWh values)
+    const numberMatch = text.match(/(\d+(?:\.\d+)?)/);
+    const amount = numberMatch ? parseFloat(numberMatch[1]) : undefined;
+
+    // Console logging for debugging
+    console.log('OCR Raw Text:', text);
+    console.log('OCR Extracted Amount:', amount);
+
+    return { amount };
+  };
+
+  const runOcrOnBase64 = async (mime: string, base64: string) => {
+    try {
+      setIsOcrLoading(true);
+      // Helper to send OCR request with a specific engine
+      const sendOcr = async (engine: 1 | 2) => {
+        const formData = new FormData();
+        formData.append('base64Image', `data:${mime};base64,${base64}`);
+        formData.append('language', 'eng');
+        formData.append('OCREngine', engine.toString());
+        formData.append('isCreateSearchablePdf', 'false');
+        formData.append('isSearchablePdfHideTextLayer', 'true');
+        formData.append('scale', 'true');
+        formData.append('detectOrientation', 'true');
+        formData.append('isTable', 'true');
+
+        const response = await fetch('https://api.ocr.space/parse/image', {
+          method: 'POST',
+          headers: {
+            'apikey': 'helloworld', // Replace with your actual API key
+          },
+          body: formData,
+        });
+
+        if (!response.ok) {
+          throw new Error(`OCR API error: ${response.status}`);
+        }
+
+        return await response.json();
+      };
+
+      // Try with engine 2 first, then fallback to engine 1
+      let json = await sendOcr(2);
+      let parsedText = json?.ParsedResults?.[0]?.ParsedText as string | undefined;
+
+      if (!parsedText || !parsedText.trim()) {
+        json = await sendOcr(1);
+        parsedText = json?.ParsedResults?.[0]?.ParsedText as string | undefined;
+      }
+
+      if (!parsedText || !parsedText.trim()) {
+        throw new Error('No text found in the image');
+      }
+
+      const result = parseOcrText(parsedText);
+      setOcrResult(result);
+
+      // Additional logging for the final result
+      console.log('OCR Final Result:', result);
+      console.log('Will auto-fill kWh field with amount:', result.amount);
+
+      if (result.amount !== undefined) {
+        setKwhValue(result.amount.toString());
+      }
+      
+      setShowOcrResult(true);
+    } catch (e: any) {
+      setOcrResult({
+        amount: undefined
+      });
+      setShowOcrResult(true);
+    } finally {
+      setIsOcrLoading(false);
+    }
+  };
+
+  const handleOpenCamera = async () => {
+    try {
+      const { status } = await ImagePicker.requestCameraPermissionsAsync();
+      if (status !== "granted") {
+        Alert.alert("Permission Denied", "Camera permission is required to take photos.");
+        return;
+      }
+      const result = await ImagePicker.launchCameraAsync({
+        mediaTypes: ImagePicker.MediaTypeOptions.Images,
+        quality: 0.5,
+        base64: true,
+        allowsEditing: false,
+      });
+      
+      if (result.canceled || !result.assets?.[0]) return;
+      
+      const asset = result.assets[0];
+      // Ensure JPEG format and moderate size for better OCR reliability
+      const manipulated = await ImageManipulator.manipulateAsync(
+        asset.uri,
+        [
+          { resize: { width: 1600 } },
+        ],
+        {
+          compress: 0.6,
+          format: ImageManipulator.SaveFormat.JPEG,
+          base64: true,
+        }
+      );
+
+      if (!manipulated.base64) {
+        Alert.alert("Error", "Failed to process the image");
+        return;
+      }
+
+      await runOcrOnBase64('image/jpeg', manipulated.base64);
+    } catch (error) {
+      console.error('Camera error:', error);
+      Alert.alert('Error', 'Failed to capture or process the image');
+    }
+  };
+
+  const handlePickDocument = async () => {
+    try {
+      const res = await DocumentPicker.getDocumentAsync({
+        type: ["application/pdf", "image/*"],
+        multiple: false,
+        copyToCacheDirectory: true,
+      });
+      
+      if (res.canceled || !res.assets?.[0]?.uri) return;
+      
+      const doc = res.assets[0];
+      const mime = doc.mimeType || (doc.name?.endsWith(".pdf") ? "application/pdf" : "image/jpeg");
+      
+      // Read file content as base64 using the legacy API
+      const base64 = await FileSystem.readAsStringAsync(doc.uri, { 
+        encoding: 'base64'
+      });
+      
+      await runOcrOnBase64(mime, base64);
+    } catch (error) {
+      console.error('Document picker error:', error);
+      Alert.alert(
+        "Document Error",
+        error instanceof Error && error.message 
+          ? `Error: ${error.message}`
+          : "We couldn't process the selected document. Please ensure it's a clear image or PDF of your bill.",
+        [{ text: "OK", style: "default" }]
+      );
+    }
   };
 
   const hasNote = note.trim().length > 0;
@@ -340,6 +510,55 @@ const AddRecord = () => {
               >
                 <Text className="text-black font-bold">Save Note</Text>
               </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
+
+      {/* --- OCR Result Modal --- */}
+      <Modal
+        visible={showOcrResult}
+        transparent={true}
+        animationType="fade"
+        statusBarTranslucent
+        onRequestClose={() => setShowOcrResult(false)}
+      >
+        <View className="flex-1 justify-center items-center bg-black/70 px-5">
+          <View className="w-full bg-[#1a3830] rounded-2xl p-6 border border-[#0fd56b]">
+            <Text className="text-white text-xl font-bold mb-4">
+              OCR Scan Result
+            </Text>
+            <View className="mb-4">
+              {ocrResult.amount !== undefined ? (
+                <Text className="text-white text-base mb-2">
+                  Detected Value: <Text className="text-[#0fd56b] font-bold">{ocrResult.amount} kWh</Text>
+                </Text>
+              ) : (
+                <Text className="text-white text-base mb-2">
+                  No number detected. Please try again with a clearer image.
+                </Text>
+              )}
+            </View>
+
+            <View className="flex-row gap-4">
+              <TouchableOpacity
+                onPress={() => setShowOcrResult(false)}
+                className="flex-1 bg-transparent border border-[#0fd56b] rounded-full py-3 items-center"
+              >
+                <Text className="text-white font-bold">Close</Text>
+              </TouchableOpacity>
+              {ocrResult.amount !== undefined && (
+                <TouchableOpacity
+                  onPress={() => {
+                    setKwhValue(ocrResult.amount!.toString());
+                    console.log('Applied OCR value to kWh field:', ocrResult.amount);
+                    setShowOcrResult(false);
+                  }}
+                  className="flex-1 bg-[#0fd56b] rounded-full py-3 items-center"
+                >
+                  <Text className="text-black font-bold">Use Value</Text>
+                </TouchableOpacity>
+              )}
             </View>
           </View>
         </View>
