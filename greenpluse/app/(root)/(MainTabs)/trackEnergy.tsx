@@ -235,6 +235,7 @@ export default function TrackEnergy() {
       {/* Summary pill - FIXED VERSION */}
       <View className="mb-6 px-2">
         <View
+        // change the border radius, rounded-full to 
           className="bg-[#0f2a22] rounded-full px-6 py-6"
           style={{ borderColor: '#0f6b4f', borderWidth: 1 }}
         >
