@@ -413,6 +413,43 @@ const ProjectDetails = () => {
           </TouchableOpacity>
         )}
       </View>
+
+      {/* Track Project Button */}
+      <View style={{ paddingHorizontal: 20, marginBottom: 24 }}>
+        <TouchableOpacity
+          style={{
+            backgroundColor: '#1AEE',
+            paddingVertical: 16,
+            borderRadius: 16,
+            alignItems: 'center',
+            flexDirection: 'row',
+            justifyContent: 'center',
+            elevation: 4,
+            shadowColor: '#A855F7',
+            shadowOffset: { width: 0, height: 4 },
+            shadowOpacity: 0.3,
+            shadowRadius: 8
+          }}
+          onPress={() => router.push({
+            pathname: '/TrackProject',
+            params: { 
+              projectId: project.docId,
+              projectTitle: project.title,
+              location: project.location
+            }
+          } as any)}
+          activeOpacity={0.9}
+        >
+          <Text style={{
+            color: 'white',
+            fontSize: 18,
+            fontWeight: '700',
+            marginRight: 8
+          }}>
+            📍 Track Project Location
+          </Text>
+        </TouchableOpacity>
+      </View>
       
       {/* Bottom Message */}
       <View style={{ paddingHorizontal: 20 }}>

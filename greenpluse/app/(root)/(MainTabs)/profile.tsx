@@ -190,102 +190,9 @@ const Profile = () => {
               </Text>
             )}
           </View>
-          <Text className="text-white text-2xl font-bold mb-1">{profile.name}</Text>
-          <Text className="text-gray-400 text-sm mb-5">{profile.email}</Text>
+          <Text className="text-white text-2xl font-bold mb-2">{profile.name}</Text>
+          <Text className="text-[#1AE57D] text-base font-medium mb-5">{profile.email}</Text>
           
-        </View>
-
-        {/* Statistics Cards */}
-        <View className="px-5 mt-6">
-          <Text className="text-white text-lg font-bold mb-4">Statistics</Text>
-          
-          {/* Request Projects */}
-          <View className="bg-[#2a3e3e] rounded-2xl p-4 mb-3 flex-row items-center justify-between">
-            <View className="flex-row items-center flex-1">
-              <View className="w-12 h-12 rounded-xl bg-[#1AE57D20] justify-center items-center mr-3">
-                <Text className="text-2xl">📋</Text>
-              </View>
-              <View className="flex-1">
-                <Text className="text-gray-400 text-xs mb-1">Request Projects</Text>
-                <Text className="text-white text-lg font-bold">{profile.totalProjects || 0} Projects</Text>
-              </View>
-            </View>
-            <Text className="text-[#1AE57D] text-3xl font-bold">{profile.totalProjects || 0}</Text>
-          </View>
-
-          {/* Credit Donations */}
-          <View className="bg-[#2a3e3e] rounded-2xl p-4 mb-3 flex-row items-center justify-between">
-            <View className="flex-row items-center flex-1">
-              <View className="w-12 h-12 rounded-xl bg-[#1AE57D20] justify-center items-center mr-3">
-                <Text className="text-2xl">💳</Text>
-              </View>
-              <View className="flex-1">
-                <Text className="text-gray-400 text-xs mb-1">Credit Donations</Text>
-                <Text className="text-white text-lg font-bold">{profile.totalDonations || 0} Times</Text>
-              </View>
-            </View>
-            <Text className="text-[#1AE57D] text-3xl font-bold">{profile.totalDonations || 0}</Text>
-          </View>
-
-          {/* LKR Donated */}
-          <View className="bg-[#2a3e3e] rounded-2xl p-4 mb-3 flex-row items-center justify-between">
-            <View className="flex-row items-center flex-1">
-              <View className="w-12 h-12 rounded-xl bg-[#1AE57D20] justify-center items-center mr-3">
-                <Text className="text-2xl">💰</Text>
-              </View>
-              <View className="flex-1">
-                <Text className="text-gray-400 text-xs mb-1">Total Amount Donated</Text>
-                <Text className="text-white text-lg font-bold">
-                  LKR {profile.totalDonationAmount ? profile.totalDonationAmount.toLocaleString() : '0'}
-                </Text>
-              </View>
-            </View>
-            <Text className="text-[#1AE57D] text-2xl font-bold">
-              {profile.totalDonationAmount ? profile.totalDonationAmount.toLocaleString() : '0'}
-            </Text>
-          </View>
-
-          {/* Coin Donations */}
-          <View className="bg-[#2a3e3e] rounded-2xl p-4 mb-3 flex-row items-center justify-between">
-            <View className="flex-row items-center flex-1">
-              <View className="w-12 h-12 rounded-xl bg-[#1AE57D20] justify-center items-center mr-3">
-                <Image source={icons.coinH} className="size-7" />
-              </View>
-              <View className="flex-1">
-                <Text className="text-gray-400 text-xs mb-1">Coin Donations</Text>
-                <Text className="text-white text-lg font-bold">0 Coins</Text>
-              </View>
-            </View>
-            <Text className="text-[#1AE57D] text-3xl font-bold">0</Text>
-          </View>
-
-          {/* Monthly Energy Usage */}
-          <View className="bg-[#2a3e3e] rounded-2xl p-4 mb-3 flex-row items-center justify-between">
-            <View className="flex-row items-center flex-1">
-              <View className="w-12 h-12 rounded-xl bg-[#1AE57D20] justify-center items-center mr-3">
-                <Text className="text-2xl">⚡</Text>
-              </View>
-              <View className="flex-1">
-                <Text className="text-gray-400 text-xs mb-1">Monthly Energy Usage</Text>
-                <Text className="text-white text-lg font-bold">0 kWh</Text>
-              </View>
-            </View>
-            <Text className="text-[#1AE57D] text-3xl font-bold">0</Text>
-          </View>
-
-          {/* Carbon Offset */}
-          <View className="bg-[#2a3e3e] rounded-2xl p-4 mb-3 flex-row items-center justify-between">
-            <View className="flex-row items-center flex-1">
-              <View className="w-12 h-12 rounded-xl bg-[#1AE57D20] justify-center items-center mr-3">
-                <Text className="text-2xl">🌱</Text>
-              </View>
-              <View className="flex-1">
-                <Text className="text-gray-400 text-xs mb-1">Carbon Offset</Text>
-                <Text className="text-white text-lg font-bold">0 kg CO₂</Text>
-              </View>
-            </View>
-            <Text className="text-[#1AE57D] text-3xl font-bold">0</Text>
-          </View>
         </View>
 
         <View className="px-5 mt-6">
@@ -335,7 +242,7 @@ const Profile = () => {
         <View className="px-5 mt-8">
           <TouchableOpacity
             className="bg-[#2a3e3e] py-4 px-5 rounded-2xl flex-row items-center mb-3"
-            onPress={() => router.push('/(root)/ProjectSetting' as any)}
+            onPress={() => router.push('' as any)}
             activeOpacity={0.8}
           >
             <Settings size={24} color="#1AE57D" />

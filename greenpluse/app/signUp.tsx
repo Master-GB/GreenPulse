@@ -15,6 +15,7 @@ import { router } from "expo-router";
 import { createUserWithEmailAndPassword, updateProfile } from "firebase/auth";
 import { auth, db } from "../config/firebaseConfig";
 import { doc, setDoc } from "firebase/firestore";
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
 export default function RegisterScreen() {
   const [name, setName] = useState("");
@@ -64,8 +65,19 @@ export default function RegisterScreen() {
         await auth.currentUser.reload();
       }
 
-      // 4. Navigate to home screen after successful registration
-      router.replace("/(root)/(MainTabs)");
+      // 4. Check if admin registration and navigate accordingly
+      const ADMIN_EMAIL = 'admin@gmail.com';
+      const ADMIN_PASSWORD = '12345678';
+      
+      if (email.toLowerCase() === ADMIN_EMAIL && password === ADMIN_PASSWORD) {
+        // Set admin session
+        await AsyncStorage.setItem('admin_authenticated', 'true');
+        // Navigate to admin dashboard
+        router.replace('/AdminDashboard' as any);
+      } else {
+        // Regular user - navigate to main tabs
+        router.replace("/(root)/(MainTabs)");
+      }
       
     } catch (error: any) {
       console.error("Registration error:", error);

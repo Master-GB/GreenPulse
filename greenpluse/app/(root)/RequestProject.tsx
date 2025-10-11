@@ -81,6 +81,14 @@ const RequestProject = () => {
             verification: true
           }
         });
+        
+        // Load saved coordinates if available
+        if (data.latitude && data.longitude) {
+          setSelectedLocation({
+            latitude: data.latitude,
+            longitude: data.longitude
+          });
+        }
       } else {
         Alert.alert('Error', 'Project not found');
         router.back();
@@ -221,6 +229,9 @@ const RequestProject = () => {
         phoneNumber: formData.phoneNumber,
         email: formData.email,
         address: formData.address,
+        location: formData.address,
+        latitude: selectedLocation?.latitude || null,
+        longitude: selectedLocation?.longitude || null,
         landReference: formData.landReference,
         propertyType: formData.propertyType,
         projectTitle: formData.projectTitle,

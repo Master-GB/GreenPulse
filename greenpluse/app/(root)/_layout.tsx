@@ -352,13 +352,31 @@ export default function RootLayout() {
         />
         
 
-
+        <Stack.Screen
+          name="MyRequestProject"
+          options={{
+            headerShown: true,
+            headerTitle: () => <AppHeader title="My Request Project" />,
+            headerStyle: {
+              backgroundColor: "#122119",
+            },
+            headerTintColor: "#fff",
+            animation: "slide_from_right",
+            gestureEnabled: true,
+            fullScreenGestureEnabled: true,
+            contentStyle: { backgroundColor: "#122119" },
+            presentation: "card",
+            headerShadowVisible: false,
+            headerTransparent: false,
+            headerBackground: () => (
+              <View style={{ flex: 1, backgroundColor: "#122119" }} />
+            ),
+            animationTypeForReplace: "push",
+          }}
+        />
         
 
-        <Stack.Screen 
-          name="MyRequestProject" 
-          options={{ headerShown: false }} 
-        />
+      
 
         <Stack.Screen
           name="Certificate"
@@ -428,14 +446,114 @@ export default function RootLayout() {
             animationTypeForReplace: "push",
           }}
         />
+        
 
-        <Stack.Screen name="PaymentPage" options={{ headerShown: false }} />
+        <Stack.Screen
+          name="TrackProject"
+          options={{
+            headerShown: true,
+            headerTitle: () => <AppHeader title="Track Projects" />,
+            headerStyle: {
+              backgroundColor: "#122119",
+            },
+            headerTintColor: "#fff",
+            animation: "slide_from_right",
+            gestureEnabled: true,
+            fullScreenGestureEnabled: true,
+            contentStyle: { backgroundColor: "#122119" },
+            presentation: "card",
+            headerShadowVisible: false,
+            headerTransparent: false,
+            headerBackground: () => (
+              <View style={{ flex: 1, backgroundColor: "#122119" }} />
+            ),
+            animationTypeForReplace: "push",
+          }}
+        />
+
+
+
+          <Stack.Screen
+          name="PaymentPage"
+          options={{
+            headerShown: true,
+            headerTitle: () => <AppHeader title="Make Donation" />,
+            headerStyle: {
+              backgroundColor: "#122119",
+            },
+            headerTintColor: "#fff",
+            animation: "slide_from_right",
+            gestureEnabled: true,
+            fullScreenGestureEnabled: true,
+            contentStyle: { backgroundColor: "#122119" },
+            presentation: "card",
+            headerShadowVisible: false,
+            headerTransparent: false,
+            headerBackground: () => (
+              <View style={{ flex: 1, backgroundColor: "#122119" }} />
+            ),
+            animationTypeForReplace: "push",
+          }}
+        />
+
+
         <Stack.Screen name="UpdateProjectStatus" options={{ headerShown: false }} />
+        <Stack.Screen name="AdminLogin" options={{ headerShown: false }} />
+        <Stack.Screen name="AdminDashboard" options={{ headerShown: false }} />
 
         <Stack.Screen name="signIn" options={{ headerShown: false }} />
+
+
+        <Stack.Screen
+          name="AdminProjectList"
+          options={{
+            headerShown: true,
+            headerTitle: () => <AppHeader title="Project Managment" />,
+            headerStyle: {
+              backgroundColor: "#122119",
+            },
+            headerTintColor: "#fff",
+            animation: "slide_from_right",
+            gestureEnabled: true,
+            fullScreenGestureEnabled: true,
+            contentStyle: { backgroundColor: "#122119" },
+            presentation: "card",
+            headerShadowVisible: false,
+            headerTransparent: false,
+            headerBackground: () => (
+              <View style={{ flex: 1, backgroundColor: "#122119" }} />
+            ),
+            animationTypeForReplace: "push",
+          }}
+        />
+
+
+        <Stack.Screen
+          name="AdminProjectDisplay"
+          options={{
+            headerShown: true,
+            headerTitle: () => <AppHeader title="Project Details" />,
+            headerStyle: {
+              backgroundColor: "#122119",
+            },
+            headerTintColor: "#fff",
+            animation: "slide_from_right",
+            gestureEnabled: true,
+            fullScreenGestureEnabled: true,
+            contentStyle: { backgroundColor: "#122119" },
+            presentation: "card",
+            headerShadowVisible: false,
+            headerTransparent: false,
+            headerBackground: () => (
+              <View style={{ flex: 1, backgroundColor: "#122119" }} />
+            ),
+            animationTypeForReplace: "push",
+          }}
+        />
 
       </Stack>
     </View>
    </ProtectedRoute>
   );
 }
+
