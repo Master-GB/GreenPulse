@@ -168,45 +168,71 @@ export default function SignIn() {
 
   // Google OAuth
   const [request, response, promptAsync] = Google.useAuthRequest({
-     clientId: '440074217275-i3rhpdihp5dg6ga01bckb8jdc29l5759.apps.googleusercontent.com',
-  webClientId: '440074217275-i3rhpdihp5dg6ga01bckb8jdc29l5759.apps.googleusercontent.com',
-  scopes: ['profile', 'email'],
-  redirectUri: 'https://auth.expo.io/@master-g/GreenPluse'
-});
+    clientId: '440074217275-i3rhpdihp5dg6ga01bckb8jdc29l5759.apps.googleusercontent.com',
+    scopes: ['profile', 'email'],
+    redirectUri: 'https://auth.expo.io/@master-g/GreenPluse',
+    iosClientId: '440074217275-i3rhpdihp5dg6ga01bckb8jdc29l5759.apps.googleusercontent.com',
+    androidClientId: '440074217275-i3rhpdihp5dg6ga01bckb8jdc29l5759.apps.googleusercontent.com'
+  });
 
   // Handle Google OAuth response
   useEffect(() => {
-    if (response?.type === 'success') {
-      const { authentication } = response;
-      if (authentication) {
-        setLoading(true);
-        const credential = GoogleAuthProvider.credential(
-          authentication.idToken,
-          authentication.accessToken
-        );
-        signInWithCredential(auth, credential)
-          .then(() => {
-            router.replace('/(root)/(MainTabs)');
-          })
-          .catch(error => {
+    const handleGoogleAuth = async () => {
+      if (response?.type === 'success') {
+        const { authentication } = response;
+        if (authentication) {
+          try {
+            setLoading(true);
+            const credential = GoogleAuthProvider.credential(
+              authentication.idToken,
+              authentication.accessToken
+            );
+            
+            // Sign in with Firebase
+            const userCredential = await signInWithCredential(auth, credential);
+            
+            if (userCredential.user) {
+              // Wait a moment to ensure the auth state is updated
+              await new Promise(resolve => setTimeout(resolve, 500));
+              // Redirect to home after successful sign in
+             router.push({
+  pathname: '/(root)',
+  params: { screen: '(MainTabs)' }
+} as any);
+            }
+            
+          } catch (error) {
             console.error('Firebase auth error:', error);
-            setErrors({ general: 'Failed to sign in with Google' });
-          })
-          .finally(() => {
+            Alert.alert('Authentication Error', 'Failed to sign in with Google. Please try again.');
+            setErrors(prev => ({ 
+              ...prev, 
+              general: 'Failed to sign in with Google. Please try again.' 
+            }));
+          } finally {
             setLoading(false);
-          });
+          }
+        }
+      } else if (response?.type === 'error') {
+        console.error('Google auth error:', response.error);
+        Alert.alert('Authentication Error', response.error?.message || 'Google sign in failed. Please try again.');
+        setErrors(prev => ({ 
+          ...prev,
+          general: response.error?.message || 'Google sign in was cancelled' 
+        }));
       }
-    } else if (response?.type === 'error') {
-      setErrors({ general: 'Google sign in was cancelled' });
-    }
-  }, [response]);
+    };
 
-  const validateEmail = (email: string): boolean => {
-    if (!email.trim()) {
+    if (response) {
+      handleGoogleAuth();
+    }
+  }, [response, router, signInWithCredential]);
+
+  const validateEmail = (emailToValidate: string): boolean => {
+    if (!emailToValidate.trim()) {
       setErrors(prev => ({ ...prev, email: 'Email is required' }));
       return false;
     }
-    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(emailToValidate)) {
       setErrors(prev => ({ ...prev, email: 'Please enter a valid email' }));
       return false;
     }
@@ -214,12 +240,12 @@ export default function SignIn() {
     return true;
   };
 
-  const validatePassword = (password: string): boolean => {
-    if (!password) {
+  const validatePassword = (passwordToValidate: string): boolean => {
+    if (!passwordToValidate) {
       setErrors(prev => ({ ...prev, password: 'Password is required' }));
       return false;
     }
-    if (password.length < 6) {
+    if (passwordToValidate.length < 6) {
       setErrors(prev => ({ ...prev, password: 'Password must be at least 6 characters' }));
       return false;
     }
@@ -239,8 +265,16 @@ export default function SignIn() {
     setErrors({});
   };
 
-  const handleGoogleSignIn = () => {
-    promptAsync();
+  const handleGoogleSignIn = async () => {
+    try {
+      await promptAsync();
+    } catch (error) {
+      console.error('Google sign-in error:', error);
+      setErrors(prev => ({
+        ...prev,
+        general: 'Failed to start Google sign-in. Please try again.'
+      }));
+    }
   };
 
   const handleEmailChange = (text: string) => {
