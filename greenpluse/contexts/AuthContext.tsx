@@ -4,15 +4,16 @@ import {
   createUserWithEmailAndPassword, 
   signInWithEmailAndPassword, 
   signOut, 
-  onAuthStateChanged 
+  onAuthStateChanged,
+  updatePassword as firebaseUpdatePassword
 } from 'firebase/auth';
-import { auth } from '../config/firebaseConfig';
+import { auth, db } from '../config/firebaseConfig';
+import { doc, getDoc, deleteDoc } from 'firebase/firestore';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
 interface AuthContextType {
   user: User | null;
   loading: boolean;
-  signUp: (email: string, password: string) => Promise<void>;
   signIn: (email: string, password: string) => Promise<void>;
   logOut: () => Promise<void>;
 }

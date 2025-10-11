@@ -139,10 +139,10 @@ const Profile = () => {
 
   if (loading) {
     return (
-      <SafeAreaView className="flex-1 bg-[#122119]">
-        <View className="flex-1 justify-center items-center">
+      <SafeAreaView style={{ flex: 1, backgroundColor: '#122119' }}>
+        <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
           <ActivityIndicator size="large" color="#1AE57D" />
-          <Text className="text-gray-400 text-sm mt-3">Loading profile...</Text>
+          <Text style={{ color: '#9ca3af', fontSize: 14, marginTop: 12 }}>Loading profile...</Text>
         </View>
       </SafeAreaView>
     );
