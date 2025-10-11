@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { View, Text, TouchableOpacity, ScrollView, StatusBar, Alert, ActivityIndicator } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { ArrowLeft, Shield, Settings, Users, FolderCheck, BarChart3, LogOut } from 'lucide-react-native';
+import { ArrowLeft, Shield, FolderCheck, LogOut } from 'lucide-react-native';
 import { useRouter } from 'expo-router';
 import { auth } from '@/config/firebaseConfig';
 import { isAdmin, checkAdminAccess, logoutAdmin } from '@/utils/adminAuth';
@@ -74,39 +74,6 @@ const AdminDashboard = () => {
         } catch (error) {
           console.error('Navigation error:', error);
         }
-      }
-    },
-    {
-      id: 2,
-      icon: BarChart3,
-      title: 'View Statistics',
-      subtitle: 'Monitor platform analytics',
-      gradient: 'from-purple-500 to-pink-600',
-      bgColor: '#A855F7',
-      onPress: () => {
-        Alert.alert('Coming Soon', 'Statistics dashboard will be available soon');
-      }
-    },
-    {
-      id: 3,
-      icon: Users,
-      title: 'Manage Users',
-      subtitle: 'View and manage user accounts',
-      gradient: 'from-green-500 to-emerald-600',
-      bgColor: '#16A34A',
-      onPress: () => {
-        Alert.alert('Coming Soon', 'User management will be available soon');
-      }
-    },
-    {
-      id: 4,
-      icon: Settings,
-      title: 'System Settings',
-      subtitle: 'Configure platform settings',
-      gradient: 'from-orange-500 to-red-600',
-      bgColor: '#F97316',
-      onPress: () => {
-        Alert.alert('Coming Soon', 'System settings will be available soon');
       }
     }
   ];
