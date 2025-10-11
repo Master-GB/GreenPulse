@@ -1,143 +1,66 @@
-import { createContext, useContext, useState, useEffect } from 'react';
+import React, { createContext, useContext, useEffect, useState } from 'react';
 import { 
+  User, 
   createUserWithEmailAndPassword, 
   signInWithEmailAndPassword, 
-  signOut as firebaseSignOut, 
-  onAuthStateChanged, 
-  User,
-  GoogleAuthProvider,
-  signInWithCredential
+  signOut, 
+  onAuthStateChanged,
+  updatePassword as firebaseUpdatePassword
 } from 'firebase/auth';
-import { auth } from '../config/firebaseConfig';
-import * as Google from 'expo-auth-session/providers/google';
-import * as WebBrowser from 'expo-web-browser';
-
-// Initialize WebBrowser for OAuth
-WebBrowser.maybeCompleteAuthSession();
+import { auth, db } from '../config/firebaseConfig';
+import { doc, getDoc, deleteDoc } from 'firebase/firestore';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
 interface AuthContextType {
   user: User | null;
   loading: boolean;
   signIn: (email: string, password: string) => Promise<void>;
-  signUp: (email: string, password: string) => Promise<void>;
-  signOut: () => Promise<void>;
-  signInWithGoogle: () => Promise<void>;
-  authError: string | null;
+  logOut: () => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
-export function AuthProvider({ children }: { children: React.ReactNode }) {
+export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
-  const [authError, setAuthError] = useState<string | null>(null);
 
-  // Google OAuth
-  const [request, response, promptAsync] = Google.useAuthRequest({
-     clientId: '440074217275-i3rhpdihp5dg6ga01bckb8jdc29l5759.apps.googleusercontent.com',
-  webClientId: '440074217275-i3rhpdihp5dg6ga01bckb8jdc29l5759.apps.googleusercontent.com',
-  scopes: ['profile', 'email'],
-  redirectUri: 'https://auth.expo.io/@master-g/GreenPluse'
-  });
-
-  // Handle Google OAuth response
-  useEffect(() => {
-    if (response?.type === 'success') {
-      const { authentication } = response;
-      if (authentication) {
-        const { idToken, accessToken } = authentication;
-        const credential = GoogleAuthProvider.credential(idToken, accessToken);
-        
-        signInWithCredential(auth, credential)
-          .catch(error => {
-            console.error('Google Sign-In Error:', error);
-            setAuthError('Failed to sign in with Google');
-          });
-      }
-    } else if (response?.type === 'error') {
-      setAuthError('Google sign in was cancelled');
-    }
-  }, [response]);
-
-  // Handle auth state changes
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, (user) => {
       setUser(user);
       setLoading(false);
     });
 
-    return () => unsubscribe();
+    return unsubscribe;
   }, []);
 
-  const signIn = async (email: string, password: string) => {
-    try {
-      setLoading(true);
-      setAuthError(null);
-      await signInWithEmailAndPassword(auth, email, password);
-    } catch (error: any) {
-      console.error('Sign in error:', error);
-      setAuthError(error.message);
-      throw error;
-    } finally {
-      setLoading(false);
-    }
-  };
-
   const signUp = async (email: string, password: string) => {
-    try {
-      setLoading(true);
-      setAuthError(null);
-      await createUserWithEmailAndPassword(auth, email, password);
-    } catch (error: any) {
-      console.error('Sign up error:', error);
-      setAuthError(error.message);
-      throw error;
-    } finally {
-      setLoading(false);
-    }
+    await createUserWithEmailAndPassword(auth, email, password);
   };
 
-  const signOut = async () => {
-    try {
-      setLoading(true);
-      setAuthError(null);
-      await firebaseSignOut(auth);
-    } catch (error: any) {
-      console.error('Sign out error:', error);
-      setAuthError(error.message);
-      throw error;
-    } finally {
-      setLoading(false);
-    }
+  const signIn = async (email: string, password: string) => {
+    await signInWithEmailAndPassword(auth, email, password);
   };
 
-  const signInWithGoogle = async () => {
-    try {
-      await promptAsync();
-    } catch (error: any) {
-      console.error('Google Sign-In Error:', error);
-      setAuthError('Failed to start Google Sign-In');
-      throw error;
-    }
+  const logOut = async () => {
+    await signOut(auth);
+    await AsyncStorage.removeItem('hasOnboarded');
   };
 
   const value = {
     user,
     loading,
-    signIn,
     signUp,
-    signOut,
-    signInWithGoogle,
-    authError
+    signIn,
+    logOut,
   };
 
-  return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
-}
+  return <AuthContext.Provider value={value}>{!loading && children}</AuthContext.Provider>;
+};
 
-export function useAuth() {
+export const useAuth = () => {
   const context = useContext(AuthContext);
   if (context === undefined) {
     throw new Error('useAuth must be used within an AuthProvider');
   }
   return context;
-}
+};
