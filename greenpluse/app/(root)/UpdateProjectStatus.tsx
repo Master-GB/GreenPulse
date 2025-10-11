@@ -2,8 +2,9 @@ import React, { useState, useEffect } from 'react';
 import { View, Text, TouchableOpacity, Alert, ScrollView, StatusBar, ActivityIndicator, TextInput, Modal } from 'react-native';
 import { ArrowLeft, ChevronDown, Check, User, MapPin, DollarSign, Edit2, X } from 'lucide-react-native';
 import { useRouter } from 'expo-router';
-import { db } from '@/config/firebaseConfig';
+import { db, auth } from '@/config/firebaseConfig';
 import { collection, getDocs, doc, updateDoc, serverTimestamp, query, orderBy } from 'firebase/firestore';
+import { isAdmin } from '@/utils/adminAuth';
 
 type ProjectStatus = 'Pending' | 'Approved' | 'Rejected' | 'Implemented' | 'Funded' | 'Published';
 
@@ -33,8 +34,36 @@ const UpdateProjectStatus = () => {
   const statuses: ProjectStatus[] = ['Pending', 'Approved', 'Published', 'Funded', 'Implemented', 'Rejected'];
 
   useEffect(() => {
-    fetchAllProjects();
+    verifyAdminAccess();
   }, []);
+
+  const verifyAdminAccess = async () => {
+    const user = auth.currentUser;
+    if (!user) {
+      Alert.alert('Access Denied', 'Please login first');
+      router.replace('/(root)/(MainTabs)/home' as any);
+      return;
+    }
+
+    if (!isAdmin()) {
+      Alert.alert('Access Denied', 'Only administrators can access this page', [
+        { text: 'OK', onPress: () => router.back() }
+      ]);
+      return;
+    }
+
+    // Check if admin has authenticated with password
+    const { checkAdminAccess } = await import('@/utils/adminAuth');
+    const hasAccess = await checkAdminAccess();
+    if (!hasAccess) {
+      Alert.alert('Authentication Required', 'Please login to admin dashboard first', [
+        { text: 'OK', onPress: () => router.replace('/AdminLogin' as any) }
+      ]);
+      return;
+    }
+
+    fetchAllProjects();
+  };
 
   const fetchAllProjects = async () => {
     try {

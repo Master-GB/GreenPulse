@@ -193,31 +193,8 @@ const MyRequestProject = () => {
   return (
     <>
       <StatusBar barStyle="light-content" backgroundColor="#1a1a1a" />
-      <View style={{ flex: 1, backgroundColor: '#1a1a1a' }}>
-        {/* Header */}
-        <View style={{
-          flexDirection: 'row',
-          alignItems: 'center',
-          paddingHorizontal: 20,
-          paddingTop: 48,
-          paddingBottom: 16,
-          backgroundColor: '#1a1a1a'
-        }}>
-          <TouchableOpacity 
-            style={{ marginRight: 16 }}
-            onPress={() => router.back()}
-          >
-            <ArrowLeft size={28} color="white" />
-          </TouchableOpacity>
-          <Text style={{ 
-            color: 'white', 
-            fontSize: 24, 
-            fontWeight: '700', 
-            flex: 1 
-          }}>
-            My Request Project
-          </Text>
-        </View>
+      <View style={{ flex: 1, backgroundColor: '#122119' }}>
+
 
         {/* Projects List */}
         <ScrollView

@@ -205,7 +205,7 @@ const NFTGallery = () => {
         )}
 
         {/* Info Section */}
-        <View className="bg-[#2a3e3e] rounded-2xl p-4 mb-4 border border-gray-700">
+        <View className="bg-[#2a3e3e] rounded-2xl p-4 mb-4 border mt-4 border-gray-700">
           <Text className="text-white text-sm font-semibold mb-2">
             About Your NFTs
           </Text>

@@ -13,6 +13,7 @@ import {
 import { useRouter } from 'expo-router';
 import { useAuth } from '../contexts/AuthContext';
 import { Redirect } from 'expo-router';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
 export default function SignIn() {
   const [email, setEmail] = useState('');
@@ -33,14 +34,25 @@ export default function SignIn() {
       return;
     }
 
-
     setLoading(true);
     setError('');
 
     try {
       await signIn(email, password);
-      router.replace("/(root)/(MainTabs)");
-      // Success - user is automatically redirected by ProtectedRoute
+      
+      // Check if admin login
+      const ADMIN_EMAIL = 'admin@gmail.com';
+      const ADMIN_PASSWORD = '12345678';
+      
+      if (email.toLowerCase() === ADMIN_EMAIL && password === ADMIN_PASSWORD) {
+        // Set admin session
+        await AsyncStorage.setItem('admin_authenticated', 'true');
+        // Navigate to admin dashboard
+        router.replace('/AdminDashboard' as any);
+      } else {
+        // Regular user - navigate to main tabs
+        router.replace("/(root)/(MainTabs)");
+      }
     } catch (error: any) {
       let errorMessage = 'Failed to sign in. Please try again.';
       

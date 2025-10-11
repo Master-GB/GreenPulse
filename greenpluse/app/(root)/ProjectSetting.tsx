@@ -1,12 +1,18 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { View, Text, TouchableOpacity, ScrollView, StatusBar, Image } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { ArrowLeft, Sun, DollarSign, MapPin, Award, Folder, Users, Settings } from 'lucide-react-native';
+import { ArrowLeft, Sun, DollarSign, MapPin, Award, Folder, Users, Settings, Shield } from 'lucide-react-native';
 import { useRouter } from 'expo-router';
 import { icons } from '@/constants/icons';
+import { isAdmin } from '@/utils/adminAuth';
 
 const ProjectsSetting = () => {
   const router = useRouter();
+  const [showAdminOption, setShowAdminOption] = useState(false);
+
+  useEffect(() => {
+    setShowAdminOption(isAdmin());
+  }, []);
 
   const menuItems = [
     {
@@ -46,7 +52,13 @@ const ProjectsSetting = () => {
       subtitle: 'Monitor project progress live',
       gradient: 'from-purple-500 to-pink-600',
       bgColor: '#A855F7',
-      onPress: () => console.log('Track Project')
+      onPress: () => {
+        try {
+          router.push('/TrackProject' as any);
+        } catch (error) {
+          console.error('Navigation error:', error);
+        }
+      }
     },
     {
       id: 4,
@@ -92,23 +104,26 @@ const ProjectsSetting = () => {
           console.error('Navigation error:', error);
         }
       }
-    },
-    {
-      id: 7,
-      icon: Settings,
-      title: 'Update Project Status',
-      subtitle: 'Change project approval status',
-      gradient: 'from-indigo-500 to-purple-600',
-      bgColor: '#6366F1',
-      onPress: () => {
-        try {
-          router.push('/UpdateProjectStatus' as any);
-        } catch (error) {
-          console.error('Navigation error:', error);
-        }
-      }
     }
   ];
+
+  const adminMenuItem = {
+    id: 99,
+    icon: Shield,
+    title: 'Admin Dashboard',
+    subtitle: 'Manage projects and system settings',
+    gradient: 'from-yellow-500 to-orange-600',
+    bgColor: '#F59E0B',
+    onPress: () => {
+      try {
+        router.push('/AdminLogin' as any);
+      } catch (error) {
+        console.error('Navigation error:', error);
+      }
+    }
+  };
+
+  const displayMenuItems = showAdminOption ? [adminMenuItem, ...menuItems] : menuItems;
 
   return (
     <SafeAreaView className="flex-1 bg-[#122119]" edges={['bottom']}>
@@ -120,7 +135,7 @@ const ProjectsSetting = () => {
         contentContainerStyle={{ paddingHorizontal: 10, paddingBottom: 20 }}
         showsVerticalScrollIndicator={false}
       >
-          {menuItems.map((item, index) => {
+          {displayMenuItems.map((item, index) => {
             const IconComponent = item.icon;
             return (
               <TouchableOpacity

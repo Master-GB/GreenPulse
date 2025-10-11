@@ -88,7 +88,7 @@ const MyDonatedList = () => {
   return (
     <>
       <StatusBar barStyle="light-content" backgroundColor="#1a1a1a" />
-      <View style={{ flex: 1, backgroundColor: '#122119' }}>
+      <View style={{ flex: 1, backgroundColor: '#12219' }}>
 
         {/* Donations List */}
         <ScrollView
