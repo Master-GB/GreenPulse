@@ -1,11 +1,12 @@
 import React, { useState, useEffect } from 'react';
 import { View, Text, TouchableOpacity, ScrollView, Image, StatusBar, ActivityIndicator, Alert } from 'react-native';
-import { ArrowLeft, Edit, Trash2 } from 'lucide-react-native';
+import { ArrowLeft, Edit, Trash2, Eye } from 'lucide-react-native';
 import { useRouter } from 'expo-router';
 import { db, auth } from '@/config/firebaseConfig';
-import { collection, query, where, getDocs, orderBy, deleteDoc, doc } from 'firebase/firestore';
+import { collection, query, where, getDocs, orderBy, deleteDoc, doc, getDoc } from 'firebase/firestore';
+import { ProjectDetailsModal } from '@/components/ProjectDetailsModal';
 
-type ProjectStatus = 'Pending' | 'Published' | 'Funded' | 'Rejected';
+type ProjectStatus = 'Pending' | 'Published' | 'Funded' | 'Rejected' | 'Approved';
 
 interface RequestedProjectType {
   id: number;
@@ -20,6 +21,8 @@ const MyRequestProject = () => {
   const router = useRouter();
   const [requestedProjects, setRequestedProjects] = useState<RequestedProjectType[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [showDetailsModal, setShowDetailsModal] = useState(false);
+  const [selectedProject, setSelectedProject] = useState<any>(null);
 
   useEffect(() => {
     fetchProjects();
@@ -92,8 +95,8 @@ const MyRequestProject = () => {
     {
       id: 3,
       docId: 'mock3',
-      title: 'Hydroelectric Power for',
-      status: 'Funded',
+      title: 'Hydroelectric Dam Upgrade',
+      status: 'Approved',
       image: 'https://images.unsplash.com/photo-1473341304170-971dccb5ac1e?w=400',
       submittedDate: '2024-01-05'
     }
@@ -150,11 +153,13 @@ const MyRequestProject = () => {
   const getStatusColor = (status: ProjectStatus) => {
     switch (status) {
       case 'Pending':
-        return '#a3e635';
+        return '#fbbf24';
       case 'Published':
         return '#a3e635';
       case 'Funded':
-        return '#a3e635';
+        return '#10b981';
+      case 'Approved':
+        return '#22c55e';
       case 'Rejected':
         return '#ef4444';
       default:
@@ -162,42 +167,34 @@ const MyRequestProject = () => {
     }
   };
 
-  const handleViewProject = (projectId: number) => {
-    // Navigate to project details
-    router.push({
-      pathname: '/(root)/RequestedProjectDetails',
-      params: { id: projectId }
-    } as any);
+  const handleViewProject = async (project: RequestedProjectType) => {
+    try {
+      // Fetch full project details from Firestore
+      const projectRef = doc(db, 'projectRequests', project.docId);
+      const projectSnap = await getDoc(projectRef);
+      
+      if (projectSnap.exists()) {
+        const fullProjectData = {
+          ...projectSnap.data(),
+          docId: project.docId,
+          id: project.id
+        };
+        setSelectedProject(fullProjectData);
+        setShowDetailsModal(true);
+      } else {
+        Alert.alert('Error', 'Project details not found');
+      }
+    } catch (error) {
+      console.error('Error fetching project details:', error);
+      Alert.alert('Error', 'Failed to load project details');
+    }
   };
 
   return (
     <>
       <StatusBar barStyle="light-content" backgroundColor="#1a1a1a" />
-      <View style={{ flex: 1, backgroundColor: '#1a1a1a' }}>
-        {/* Header */}
-        <View style={{
-          flexDirection: 'row',
-          alignItems: 'center',
-          paddingHorizontal: 20,
-          paddingTop: 48,
-          paddingBottom: 16,
-          backgroundColor: '#1a1a1a'
-        }}>
-          <TouchableOpacity 
-            style={{ marginRight: 16 }}
-            onPress={() => router.back()}
-          >
-            <ArrowLeft size={28} color="white" />
-          </TouchableOpacity>
-          <Text style={{ 
-            color: 'white', 
-            fontSize: 24, 
-            fontWeight: '700', 
-            flex: 1 
-          }}>
-            My Request Project
-          </Text>
-        </View>
+      <View style={{ flex: 1, backgroundColor: '#122119' }}>
+
 
         {/* Projects List */}
         <ScrollView
@@ -301,19 +298,21 @@ const MyRequestProject = () => {
                       </Text>
                     </TouchableOpacity>
                   )}
-                  
                   {/* View Button */}
                   <TouchableOpacity
                     style={{
                       backgroundColor: '#2d5a2d',
-                      paddingVertical: 8,
+                      paddingVertical: 6,
                       paddingHorizontal: 12,
-                      borderRadius: 8
+                      borderRadius: 8,
+                      flexDirection: 'row',
+                      alignItems: 'center'
                     }}
-                    onPress={() => handleViewProject(project.id)}
+                    onPress={() => handleViewProject(project)}
                     activeOpacity={0.8}
                   >
-                    <Text style={{ color: 'white', fontSize: 13, fontWeight: '600' }}>
+                    <Eye size={14} color="white" />
+                    <Text style={{ color: 'white', fontSize: 13, fontWeight: '600', marginLeft: 4 }}>
                       View
                     </Text>
                   </TouchableOpacity>
@@ -374,6 +373,16 @@ const MyRequestProject = () => {
           </TouchableOpacity>
         </View>
       </View>
+
+      {/* Project Details Modal */}
+      <ProjectDetailsModal
+        visible={showDetailsModal}
+        onClose={() => {
+          setShowDetailsModal(false);
+          setSelectedProject(null);
+        }}
+        project={selectedProject}
+      />
     </>
   );
 };

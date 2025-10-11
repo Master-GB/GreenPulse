@@ -9,11 +9,18 @@ import {
   StatusBar,
   Alert,
   Platform,
+  Modal,
 } from 'react-native'
 import React, { useState } from 'react'
 import { Camera, Calendar } from 'lucide-react-native'
 import { useRouter } from 'expo-router'
 import DateTimePicker from '@react-native-community/datetimepicker'
+
+// --- OCR Imports ---
+import * as ImagePicker from "expo-image-picker";
+import * as DocumentPicker from "expo-document-picker";
+import * as FileSystem from "expo-file-system/legacy";
+import * as ImageManipulator from "expo-image-manipulator";
 
 import logoicon from '../../assets/images/GreenPluseLogo.png'
 import camImage from '../../assets/images/camerascanner2.png'
@@ -34,6 +41,11 @@ const AddUsage = () => {
   const [device, setDevice] = useState('')
   const [dateTime, setDateTime] = useState(new Date())
   const [showDatePicker, setShowDatePicker] = useState(false)
+
+  // --- OCR State ---
+  const [ocrResult, setOcrResult] = useState<{amount?: number}>({})
+  const [showOcrResult, setShowOcrResult] = useState(false)
+  const [isOcrLoading, setIsOcrLoading] = useState(false)
 
   const handleSaveUsage = async () => {
     if (!user) {
@@ -97,7 +109,106 @@ const AddUsage = () => {
   }
 
   const handleUseScanner = () => {
-    Alert.alert('Scanner', 'OCR Scanner will be implemented')
+    Alert.alert(
+      'Select Source',
+      'Choose how to scan your document',
+      [
+        { text: 'Camera', onPress: handleOpenCamera },
+        { text: 'Photo Library', onPress: handlePickDocument },
+        { text: 'Cancel', style: 'cancel' },
+      ]
+    )
+  }
+
+  // --- OCR Functions ---
+  const parseOcrText = (text: string) => {
+    // Extract the first number found in the text (for kWh values)
+    const numberMatch = text.match(/(\d+(?:\.\d+)?)/);
+    const amount = numberMatch ? parseFloat(numberMatch[1]) : undefined;
+
+    // Console logging for debugging
+    console.log('OCR Raw Text:', text);
+    console.log('OCR Extracted Amount:', amount);
+
+    return { amount };
+  }
+
+  const runOcrOnBase64 = async (base64: string) => {
+    setIsOcrLoading(true)
+    try {
+      const formData = new FormData()
+      formData.append('base64Image', `data:image/jpeg;base64,${base64}`)
+      formData.append('language', 'eng')
+      formData.append('isCreateSearchablePdf', 'false')
+      formData.append('isSearchablePdfHideTextLayer', 'true')
+
+      const response = await fetch('https://api.ocr.space/parse/image', {
+        method: 'POST',
+        headers: {
+          'apikey': 'helloworld', // Replace with your actual API key
+        },
+        body: formData,
+      })
+
+      const data = await response.json()
+      if (data.IsErroredOnProcessing) {
+        throw new Error(data.ErrorMessage?.[0] || 'OCR processing failed')
+      }
+
+      const extractedText = data.ParsedResults?.[0]?.ParsedText || ''
+      const parsedData = parseOcrText(extractedText)
+      setOcrResult(parsedData)
+
+      // Additional logging for the final result
+      console.log('OCR Final Result:', parsedData);
+      console.log('Will auto-fill kWh field with amount:', parsedData.amount);
+
+      setShowOcrResult(true)
+    } catch (error) {
+      console.error('OCR Error:', error)
+      setOcrResult({ amount: undefined })
+      Alert.alert('OCR Error', 'Failed to process the image. Please try again.')
+    } finally {
+      setIsOcrLoading(false)
+    }
+  }
+
+  const handleOpenCamera = async () => {
+    const permission = await ImagePicker.requestCameraPermissionsAsync()
+    if (permission.granted) {
+      const result = await ImagePicker.launchCameraAsync({
+        mediaTypes: ImagePicker.MediaTypeOptions.Images,
+        allowsEditing: true,
+        aspect: [4, 3],
+        quality: 1,
+        base64: true,
+      })
+
+      if (!result.canceled && result.assets[0].base64) {
+        await runOcrOnBase64(result.assets[0].base64)
+      }
+    } else {
+      Alert.alert('Permission Denied', 'Camera permission is required to scan documents.')
+    }
+  }
+
+  const handlePickDocument = async () => {
+    const permission = await ImagePicker.requestMediaLibraryPermissionsAsync()
+    if (permission.granted) {
+      const result = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ImagePicker.MediaTypeOptions.Images,
+        allowsEditing: true,
+        aspect: [4, 3],
+        quality: 1,
+        base64: true,
+      })
+
+      if (!result.canceled && result.assets[0].base64) {
+        await runOcrOnBase64(result.assets[0].base64)
+      }
+    } else {
+      Alert.alert('Permission Denied', 'Media library permission is required to pick documents.')
+    }
   }
 
   return (
@@ -206,6 +317,59 @@ const AddUsage = () => {
           <Text className="text-black font-bold text-lg">Save Usage</Text>
         </TouchableOpacity>
       </ScrollView>
+
+      {/* OCR Result Modal */}
+      {showOcrResult && (
+        <View className="absolute inset-0 bg-black bg-opacity-50 justify-center items-center">
+          <View className="bg-[#1a3830] rounded-3xl p-6 mx-5 w-full max-w-sm">
+            <Text className="text-white text-xl font-bold mb-4 text-center">OCR Results</Text>
+            
+            <View className="mb-4">
+              {ocrResult.amount !== undefined ? (
+                <Text className="text-white text-base mb-2">
+                  Detected Value: <Text className="text-[#0fd56b] font-bold">{ocrResult.amount} kWh</Text>
+                </Text>
+              ) : (
+                <Text className="text-white text-base mb-2">
+                  No number detected. Please try again with a clearer image.
+                </Text>
+              )}
+            </View>
+
+            <View className="flex-row gap-3 mt-6">
+              <TouchableOpacity
+                onPress={() => setShowOcrResult(false)}
+                className="flex-1 bg-gray-600 rounded-full py-3 items-center"
+              >
+                <Text className="text-white font-bold">Cancel</Text>
+              </TouchableOpacity>
+              
+              {ocrResult.amount !== undefined && (
+                <TouchableOpacity
+                  onPress={() => {
+                    setKwhValue(ocrResult.amount!.toString());
+                    console.log('Applied OCR value to kWh field:', ocrResult.amount);
+                    setShowOcrResult(false);
+                  }}
+                  className="flex-1 bg-[#0fd56b] rounded-full py-3 items-center"
+                >
+                  <Text className="text-black font-bold">Apply</Text>
+                </TouchableOpacity>
+              )}
+            </View>
+          </View>
+        </View>
+      )}
+
+      {/* Loading Modal */}
+      {isOcrLoading && (
+        <View className="absolute inset-0 bg-black bg-opacity-50 justify-center items-center">
+          <View className="bg-[#1a3830] rounded-3xl p-6 mx-5">
+            <Text className="text-white text-lg font-bold mb-4 text-center">Processing Image...</Text>
+            <Text className="text-white text-center">Please wait while we extract text from your document.</Text>
+          </View>
+        </View>
+      )}
     </SafeAreaView>
   )
 }
