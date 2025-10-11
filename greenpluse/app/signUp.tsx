@@ -45,11 +45,16 @@ export default function RegisterScreen() {
       const userEmail = userCredential.user.email;
       const userName = name.trim();
       
-      // 2. Store user data in Firestore
-      await setDoc(doc(db, "users", userId), {
+      // 2. Store user data in AllUsers collection
+      await setDoc(doc(db, "AllUsers", userId), {
+        uid: userId,
         displayName: userName,
         email: userEmail,
         createdAt: new Date().toISOString(),
+        location: "", // Default empty location, user can update later
+        energyRecords: [], // Initialize empty energy records array
+        totalCoins: 0, // Initialize with 0 coins
+        lastUpdated: new Date().toISOString(),
       });
       
       // 3. Update the user's auth profile
