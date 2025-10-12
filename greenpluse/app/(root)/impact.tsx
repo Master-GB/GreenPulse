@@ -803,13 +803,13 @@ export default function Impact() {
             <View className="flex-row flex-wrap gap-3 mb-6">
               <View className="flex-1 bg-[#1a4d3a] rounded-2xl p-4 items-center">
                 <Zap size={24} color="#2ECC71" />
-                <Text className="text-white text-xl font-bold mt-2">1,040 kWh</Text>
+                <Text className="text-white text-xl font-bold mt-2">{donatedEnergy.total.toLocaleString()} kWh</Text>
                 <Text className="text-gray-300 text-xs">Donated Energy</Text>
               </View>
               
               <View className="flex-1 bg-[#1a4d3a] rounded-2xl p-4 items-center">
                 <Leaf size={24} color="#2ECC71" />
-                <Text className="text-white text-xl font-bold mt-2">2,456 kg</Text>
+                <Text className="text-white text-xl font-bold mt-2">{Math.round(co2Data.total).toLocaleString()} kg</Text>
                 <Text className="text-gray-300 text-xs">CO₂ Avoided</Text>
               </View>
             </View>
@@ -817,13 +817,13 @@ export default function Impact() {
             <View className="flex-row flex-wrap gap-3 mb-6">
               <View className="flex-1 bg-[#1a4d3a] rounded-2xl p-4 items-center">
                 <Globe size={24} color="#2ECC71" />
-                <Text className="text-white text-xl font-bold mt-2">12</Text>
+                <Text className="text-white text-xl font-bold mt-2">{helpedProjects.toLocaleString()}</Text>
                 <Text className="text-gray-300 text-xs">Projects Helped</Text>
               </View>
               
               <View className="flex-1 bg-[#1a4d3a] rounded-2xl p-4 items-center">
                 <Users size={24} color="#2ECC71" />
-                <Text className="text-white text-xl font-bold mt-2">18</Text>
+                <Text className="text-white text-xl font-bold mt-2">{familiesHelped.total.toLocaleString()}</Text>
                 <Text className="text-gray-300 text-xs">Families Helped</Text>
               </View>
             </View>
