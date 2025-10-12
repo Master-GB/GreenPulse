@@ -171,14 +171,8 @@ export default function Home() {
       {/* Header */}
       <View className="flex-row justify-between items-center px-5">
         <Image source={images.logo}  className="size-14 ml-[-12px]" />
-        <Text className="text-white text-2xl font-bold mr-16 ml-[-3px]">GreenPulse</Text>
+        <Text className="text-white text-2xl font-bold mr-28 mb-1">GreenPulse</Text>
         <View className="flex-row items-center gap-3">
-          <View className="relative ml-2 mr-1">
-            <Bell size={24} color="white" />
-            <View className="absolute -top-2 -right-1 bg-red-500 rounded-full w-5 h-5 items-center justify-center">
-              <Text className="text-white text-xs font-bold">3</Text>
-            </View>
-          </View>
           <TouchableOpacity 
           className='bg-[#2a3e3e] rounded-full px-3 py-2 flex-row items-center gap-2 mb-2'
           onPress={() => router.push('/(root)/wallet')}
@@ -277,7 +271,7 @@ export default function Home() {
 
           <View className="flex-row gap-3 mt-3">
             <TouchableOpacity 
-            className="flex-[1.5] bg-[#2a3e3e] rounded-2xl  items-center justify-center h-28"
+            className="flex-[1.8] bg-[#2a3e3e] rounded-2xl  items-center justify-center h-28"
             onPress={() => router.push('/(root)/pay_bill')}
             >
                <Image source={icons.pay_bill} className="size-12 mb-1" />
