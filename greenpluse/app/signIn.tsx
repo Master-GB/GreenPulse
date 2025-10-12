@@ -112,7 +112,7 @@ const SignInIllustration: React.FC = () => {
 
   return (
     <Animated.View 
-      className="items-center justify-center mt-[-37px]"
+      className="items-center justify-center mt-[-40px]"
       style={{
         transform: [{ translateY }],
       }}
@@ -874,7 +874,7 @@ export default function SignIn() {
           {/* Forgot Password */}
           <TouchableOpacity 
             onPress={() => router.push('/forgotPassword')}
-            className="self-end mb-4"
+            className="self-end mb-4 mt-1"
           >
             <Text className="text-[#1AE57D] text-sm font-medium">Forgot Password?</Text>
           </TouchableOpacity>
