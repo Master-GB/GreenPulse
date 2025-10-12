@@ -4,175 +4,48 @@ import {
   Text, 
   TextInput, 
   TouchableOpacity, 
+  StyleSheet, 
   ActivityIndicator,
   KeyboardAvoidingView,
   Platform,
   ScrollView,
-  Image,
-  StatusBar,
-  Alert
+  Alert,
+  Image
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useAuth } from '../contexts/AuthContext';
-import { images } from '../constants/images';
-import { SafeAreaView } from 'react-native-safe-area-context';
-import { Eye, EyeOff, Mail, Lock, AlertCircle } from 'lucide-react-native';
-import * as WebBrowser from 'expo-web-browser';
+import { Redirect } from 'expo-router';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as Google from 'expo-auth-session/providers/google';
-import { auth } from '../config/firebaseConfig';
+import * as WebBrowser from 'expo-web-browser';
 import { GoogleAuthProvider, signInWithCredential } from 'firebase/auth';
+import { auth } from '../config/firebaseConfig';
 
-// Initialize WebBrowser for OAuth
+// Required for Google OAuth
 WebBrowser.maybeCompleteAuthSession();
-
-// Constants
-const COLORS = {
-  primary: '#1AE57D',
-  primaryDark: '#15C96D',
-  background: '#122119',
-  cardBg: '#1a2e2e',
-  border: '#374151',
-  borderFocus: '#1AE57D',
-  error: '#EF4444',
-  errorBg: '#7F1D1D',
-  text: '#FFFFFF',
-  textSecondary: '#9CA3AF',
-  placeholder: '#6b7280',
-};
-
-interface FormErrors {
-  email?: string;
-  password?: string;
-  general?: string;
-}
-
-interface InputFieldProps {
-  label: string;
-  value: string;
-  onChangeText: (text: string) => void;
-  placeholder: string;
-  error?: string;
-  secureTextEntry?: boolean;
-  onSecureToggle?: () => void;
-  showSecureToggle?: boolean;
-  icon?: React.ReactNode;
-  keyboardType?: 'default' | 'email-address';
-  autoCapitalize?: 'none' | 'sentences' | 'words' | 'characters';
-  autoComplete?: string;
-  onFocus?: () => void;
-  onBlur?: () => void;
-}
-
-const InputField: React.FC<InputFieldProps> = ({
-  label,
-  value,
-  onChangeText,
-  placeholder,
-  error,
-  secureTextEntry,
-  onSecureToggle,
-  icon,
-  keyboardType = 'default',
-  autoCapitalize = 'none',
-  autoComplete,
-  onFocus,
-  onBlur,
-}) => {
-  const [isFocused, setIsFocused] = useState(false);
-
-  return (
-    <View className="mb-4">
-      <Text className="text-gray-300 text-sm mb-2 ml-1 font-medium">{label}</Text>
-      <View className="relative">
-        <View
-          className={`flex-row items-center bg-[#1a2e2e] rounded-xl px-4 py-2.5 border-2 ${
-            error 
-              ? 'border-red-500' 
-              : isFocused 
-              ? 'border-[#1AE57D]' 
-              : 'border-gray-700'
-          }`}
-        >
-          {icon && <View className="mr-3">{icon}</View>}
-          <TextInput
-            className="flex-1 text-white text-base py-2.5"
-            placeholder={placeholder}
-            placeholderTextColor={COLORS.placeholder}
-            value={value}
-            onChangeText={onChangeText}
-            secureTextEntry={secureTextEntry}
-            keyboardType={keyboardType}
-            autoCapitalize={autoCapitalize}
-            autoCorrect={false}
-            autoComplete={autoComplete as any}
-            onFocus={() => {
-              setIsFocused(true);
-              onFocus?.();
-            }}
-            onBlur={() => {
-              setIsFocused(false);
-              onBlur?.();
-            }}
-          />
-          {onSecureToggle && (
-            <TouchableOpacity onPress={onSecureToggle} className="p-2">
-              {secureTextEntry ? (
-                <EyeOff size={20} color={COLORS.textSecondary} />
-              ) : (
-                <Eye size={20} color={COLORS.textSecondary} />
-              )}
-            </TouchableOpacity>
-          )}
-        </View>
-        {error && (
-          <View className="flex-row items-center mt-2 ml-1">
-            <AlertCircle size={14} color={COLORS.error} />
-            <Text className="text-red-500 text-xs ml-1">{error}</Text>
-          </View>
-        )}
-      </View>
-    </View>
-  );
-};
-
-interface ErrorBannerProps {
-  message: string;
-  onDismiss: () => void;
-}
-
-const ErrorBanner: React.FC<ErrorBannerProps> = ({ message, onDismiss }) => {
-  return (
-    <View className="bg-red-500/10 border-2 border-red-500 rounded-xl p-4 mb-6 flex-row items-start">
-      <AlertCircle size={20} color={COLORS.error} className="mt-0.5" />
-      <View className="flex-1 ml-3">
-        <Text className="text-red-400 font-medium text-sm leading-5">{message}</Text>
-      </View>
-      <TouchableOpacity onPress={onDismiss} className="ml-2">
-        <Text className="text-red-400 font-bold text-lg">×</Text>
-      </TouchableOpacity>
-    </View>
-  );
-};
 
 export default function SignIn() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
-  const [showPassword, setShowPassword] = useState(false);
+  const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
-  const [isEmailTouched, setIsEmailTouched] = useState(false);
-  const [isPasswordTouched, setIsPasswordTouched] = useState(false);
-  const [errors, setErrors] = useState<FormErrors>({});
-  
   const { signIn } = useAuth();
   const router = useRouter();
+
+  const [isEmailTouched, setIsEmailTouched] = useState(false);
+  const [isPasswordTouched, setIsPasswordTouched] = useState(false);
+  const [errors, setErrors] = useState<{
+    email?: string;
+    password?: string;
+    general?: string;
+  }>({});
 
   // Google OAuth
   const [request, response, promptAsync] = Google.useAuthRequest({
     clientId: '440074217275-i3rhpdihp5dg6ga01bckb8jdc29l5759.apps.googleusercontent.com',
-    scopes: ['profile', 'email'],
-    redirectUri: 'https://auth.expo.io/@master-g/GreenPluse',
+    androidClientId: '440074217275-i3rhpdihp5dg6ga01bckb8jdc29l5759.apps.googleusercontent.com',
     iosClientId: '440074217275-i3rhpdihp5dg6ga01bckb8jdc29l5759.apps.googleusercontent.com',
-    androidClientId: '440074217275-i3rhpdihp5dg6ga01bckb8jdc29l5759.apps.googleusercontent.com'
+    scopes: ['profile', 'email'],
   });
 
   // Handle Google OAuth response
@@ -195,18 +68,18 @@ export default function SignIn() {
               // Wait a moment to ensure the auth state is updated
               await new Promise(resolve => setTimeout(resolve, 500));
               // Redirect to home after successful sign in
-             router.push({
-  pathname: '/(root)',
-  params: { screen: '(MainTabs)' }
-} as any);
+              router.push({
+                pathname: '/(root)',
+                params: { screen: '(MainTabs)' }
+              } as any);
             }
             
-          } catch (error) {
+          } catch (error: any) {
             console.error('Firebase auth error:', error);
-            Alert.alert('Authentication Error', 'Failed to sign in with Google. Please try again.');
+            Alert.alert('Authentication Error', error.message || 'Failed to sign in with Google. Please try again.');
             setErrors(prev => ({ 
               ...prev, 
-              general: 'Failed to sign in with Google. Please try again.' 
+              general: error.message || 'Failed to sign in with Google. Please try again.' 
             }));
           } finally {
             setLoading(false);
@@ -225,7 +98,7 @@ export default function SignIn() {
     if (response) {
       handleGoogleAuth();
     }
-  }, [response, router, signInWithCredential]);
+  }, [response, router]);
 
   const validateEmail = (emailToValidate: string): boolean => {
     if (!emailToValidate.trim()) {
@@ -253,7 +126,9 @@ export default function SignIn() {
     return true;
   };
 
-  const clearError = (field: keyof FormErrors) => {
+  type FormErrorField = 'email' | 'password' | 'general';
+
+  const clearError = (field: FormErrorField) => {
     setErrors(prev => {
       const newErrors = { ...prev };
       delete newErrors[field];
@@ -265,14 +140,15 @@ export default function SignIn() {
     setErrors({});
   };
 
-  const handleGoogleSignIn = async () => {
+  const handleGoogleSignInPress = async () => {
     try {
       await promptAsync();
-    } catch (error) {
+    } catch (error: any) {
       console.error('Google sign-in error:', error);
+      Alert.alert('Error', 'Failed to start Google sign in. Please try again.');
       setErrors(prev => ({
         ...prev,
-        general: 'Failed to start Google sign-in. Please try again.'
+        general: error.message || 'Failed to start Google sign in. Please try again.'
       }));
     }
   };
@@ -302,174 +178,115 @@ export default function SignIn() {
   };
 
   const handleSignIn = async () => {
-    clearAllErrors();
+    if (!email || !password) {
+      setError('Please fill in all fields');
+      return;
+    }
 
-    const isEmailValid = validateEmail(email);
-    const isPasswordValid = validatePassword(password);
-
-    if (!isEmailValid || !isPasswordValid) {
+    if (!email.includes('@')) {
+      setError('Please enter a valid email');
       return;
     }
 
     setLoading(true);
+    setError('');
 
     try {
       await signIn(email, password);
-      router.replace('/(root)/(MainTabs)');
+      
+      // Check if admin login
+      const ADMIN_EMAIL = 'admin@gmail.com';
+      const ADMIN_PASSWORD = '12345678';
+      
+      if (email.toLowerCase() === ADMIN_EMAIL && password === ADMIN_PASSWORD) {
+        // Set admin session
+        await AsyncStorage.setItem('admin_authenticated', 'true');
+        // Navigate to admin dashboard
+        router.replace('/AdminDashboard' as any);
+      } else {
+        // Regular user - navigate to main tabs
+        router.replace("/(root)/(MainTabs)");
+      }
     } catch (error: any) {
       let errorMessage = 'Failed to sign in. Please try again.';
       
-      switch (error.code) {
-        case 'auth/user-not-found':
-        case 'auth/wrong-password':
-          errorMessage = 'Invalid email or password. Please check your credentials.';
-          break;
-        case 'auth/too-many-requests':
-          errorMessage = 'Too many failed attempts. Please try again later.';
-          break;
-        case 'auth/user-disabled':
-          errorMessage = 'This account has been disabled. Please contact support.';
-          break;
-        case 'auth/network-request-failed':
-          errorMessage = 'Network error. Please check your connection.';
-          break;
-        case 'auth/invalid-email':
-          errorMessage = 'Invalid email format. Please check and try again.';
-          break;
-        default:
-          console.error('Sign in error:', error);
+      // Handle common Firebase Auth errors
+      if (error.code === 'auth/user-not-found' || error.code === 'auth/wrong-password') {
+        errorMessage = 'Invalid email or password';
+      } else if (error.code === 'auth/too-many-requests') {
+        errorMessage = 'Too many failed attempts. Please try again later.';
       }
       
-      setErrors({ general: errorMessage });
+      setError(errorMessage);
     } finally {
       setLoading(false);
     }
   };
 
-  const handleForgotPassword = () => {
-    if (!email) {
-      Alert.alert(
-        'Email Required',
-        'Please enter your email address first.',
-        [{ text: 'OK' }]
-      );
-      return;
-    }
-
-    if (!validateEmail(email)) {
-      Alert.alert(
-        'Invalid Email',
-        'Please enter a valid email address.',
-        [{ text: 'OK' }]
-      );
-      return;
-    }
-
-    Alert.alert(
-      'Reset Password',
-      `We'll send a password reset link to ${email}`,
-      [
-        { text: 'Cancel', style: 'cancel' },
-        { 
-          text: 'Send', 
-          onPress: () => {
-            // TODO: Implement password reset logic
-            Alert.alert('Success', 'Password reset link sent to your email!');
-          }
-        },
-      ]
-    );
-  };
-
   return (
-    <SafeAreaView className="flex-1 bg-[#122119] justify-center">
-      <StatusBar barStyle="light-content" backgroundColor={COLORS.background} />
-      
-      <KeyboardAvoidingView 
-        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-        className="flex-1 justify-center px-6 py-10"
-        keyboardVerticalOffset={Platform.OS === 'ios' ? 40 : 0}
+    <KeyboardAvoidingView
+      style={styles.container}
+      behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+      keyboardVerticalOffset={Platform.OS === 'ios' ? 64 : 0}
+    >
+      <ScrollView 
+        contentContainerStyle={styles.scrollContainer}
+        keyboardShouldPersistTaps="handled"
       >
-        <ScrollView 
-          contentContainerStyle={{ flexGrow: 1, justifyContent: 'center' }}
-          showsVerticalScrollIndicator={false}
-        >
-          {/* Logo and Welcome */}
-          <View className="items-center mb-6">
-            <View className="bg-[#1a2e2e] rounded-full p-5 mb-6 border-2 border-[#2a4a3a]">
-              <Image 
-                source={images.logo}
-                className="w-20 h-20"
-                resizeMode="contain"
-              />
-            </View>
-            <Text className="text-2xl font-bold text-white mb-2">Welcome Back</Text>
-            <Text className="text-gray-400">Sign in to continue</Text>
+        <View style={styles.formContainer}>
+          <Text style={styles.title}>Welcome Back</Text>
+          <Text style={styles.subtitle}>Sign in to continue</Text>
+
+          {error ? <Text style={styles.errorText}>{error}</Text> : null}
+
+          <View style={styles.inputContainer}>
+            <Text style={styles.label}>Email</Text>
+            <TextInput
+              style={styles.input}
+              placeholder="Enter your email"
+              value={email}
+              onChangeText={setEmail}
+              autoCapitalize="none"
+              keyboardType="email-address"
+              autoComplete="email"
+              placeholderTextColor="#999"
+            />
           </View>
 
-          {/* Error Banner */}
-          {errors.general && (
-            <ErrorBanner 
-              message={errors.general} 
-              onDismiss={() => clearError('general')} 
+          <View style={styles.inputContainer}>
+            <View style={styles.labelContainer}>
+              <Text style={styles.label}>Password</Text>
+              <TouchableOpacity onPress={() => router.push('/forgotPassword')}>
+                <Text style={styles.forgotPassword}>Forgot?</Text>
+              </TouchableOpacity>
+            </View>
+            <TextInput
+              style={styles.input}
+              placeholder="Enter your password"
+              value={password}
+              onChangeText={setPassword}
+              secureTextEntry
+              autoComplete="current-password"
+              placeholderTextColor="#999"
             />
-          )}
+          </View>
 
-          {/* Email Input */}
-          <InputField
-            label="Email Address"
-            value={email}
-            onChangeText={handleEmailChange}
-            onBlur={handleEmailBlur}
-            placeholder="Enter your email"
-            error={errors.email}
-            keyboardType="email-address"
-            autoCapitalize="none"
-            autoComplete="email"
-            icon={<Mail size={20} color={COLORS.textSecondary} />}
-          />
-
-          {/* Password Input */}
-          <InputField
-            label="Password"
-            value={password}
-            onChangeText={handlePasswordChange}
-            onBlur={handlePasswordBlur}
-            placeholder="Enter your password"
-            error={errors.password}
-            secureTextEntry={!showPassword}
-            onSecureToggle={() => setShowPassword(!showPassword)}
-            showSecureToggle
-            icon={<Lock size={20} color={COLORS.textSecondary} />}
-          />
-
-          {/* Forgot Password */}
           <TouchableOpacity 
-            onPress={handleForgotPassword}
-            className="self-end mb-6"
-          >
-            <Text className="text-[#1AE57D] text-sm font-medium">Forgot Password?</Text>
-          </TouchableOpacity>
-
-          {/* Sign In Button */}
-          <TouchableOpacity
+            style={[styles.button, loading && styles.buttonDisabled]}
             onPress={handleSignIn}
             disabled={loading}
-            className="bg-[#1AE57D] py-4 rounded-xl items-center mb-6"
-            activeOpacity={0.8}
           >
             {loading ? (
-              <ActivityIndicator color={COLORS.background} size="small" />
+              <ActivityIndicator color="#fff" />
             ) : (
-              <Text className="text-[#122119] text-base font-semibold">Sign In</Text>
+              <Text style={styles.buttonText}>Sign In</Text>
             )}
           </TouchableOpacity>
 
-          {/* Divider */}
-          <View className="flex-row items-center justify-center mb-6">
-            <View className="flex-1 h-px bg-gray-700" />
-            <Text className="text-gray-500 mx-4 text-sm">OR</Text>
-            <View className="flex-1 h-px bg-gray-700" />
+          <View style={styles.dividerContainer}>
+            <View style={styles.divider} />
+            <Text style={styles.dividerText}>OR</Text>
+            <View style={styles.divider} />
           </View>
 
           {/* Google Sign In Button */}
@@ -480,24 +297,145 @@ export default function SignIn() {
             activeOpacity={0.8}
           >
             <Image 
-              source={{ uri: 'https://www.google.com/favicon.ico' }}
-              className="w-6 h-6 mr-3"
-              resizeMode="contain"
+              source={{ uri: 'https://www.google.com/favicon.ico' }} 
+              style={styles.googleIcon} 
             />
-            <Text className="text-gray-800 text-base font-medium">
-              {loading ? 'Signing in...' : 'Sign in with Google'}
-            </Text>
+            <Text style={styles.googleButtonText}>Sign in with Google</Text>
           </TouchableOpacity>
 
-          {/* Sign Up Link */}
-          <View className="flex-row justify-center">
-            <Text className="text-gray-400">Don't have an account? </Text>
+          <View style={styles.footer}>
+            <Text style={styles.footerText}>Don't have an account? </Text>
             <TouchableOpacity onPress={() => router.push('/signUp')}>
-              <Text className="text-[#1AE57D] font-medium">Sign Up</Text>
+              <Text style={styles.signUpLink}>Sign up</Text>
             </TouchableOpacity>
           </View>
-        </ScrollView>
-      </KeyboardAvoidingView>
-    </SafeAreaView>
+        </View>
+      </ScrollView>
+    </KeyboardAvoidingView>
   );
 }
+
+const styles = StyleSheet.create({
+  container: {
+    flex: 1,
+    backgroundColor: '#fff',
+  },
+  scrollContainer: {
+    flexGrow: 1,
+    justifyContent: 'center',
+    padding: 20,
+  },
+  formContainer: {
+    width: '100%',
+    maxWidth: 400,
+    alignSelf: 'center',
+    padding: 20,
+  },
+  title: {
+    fontSize: 28,
+    fontWeight: 'bold',
+    color: '#333',
+    marginBottom: 8,
+    textAlign: 'center',
+  },
+  subtitle: {
+    fontSize: 16,
+    color: '#666',
+    marginBottom: 32,
+    textAlign: 'center',
+  },
+  inputContainer: {
+    marginBottom: 20,
+  },
+  labelContainer: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    marginBottom: 8,
+  },
+  label: {
+    fontSize: 14,
+    color: '#444',
+    fontWeight: '500',
+  },
+  input: {
+    backgroundColor: '#f8f8f8',
+    borderWidth: 1,
+    borderColor: '#e0e0e0',
+    borderRadius: 8,
+    padding: 14,
+    fontSize: 16,
+    color: '#333',
+  },
+  button: {
+    backgroundColor: '#007AFF',
+    padding: 16,
+    borderRadius: 8,
+    alignItems: 'center',
+    marginTop: 10,
+  },
+  buttonDisabled: {
+    opacity: 0.7,
+  },
+  buttonText: {
+    color: '#fff',
+    fontSize: 16,
+    fontWeight: '600',
+  },
+  footer: {
+    flexDirection: 'row',
+    justifyContent: 'center',
+    marginTop: 24,
+  },
+  footerText: {
+    color: '#666',
+  },
+  signUpLink: {
+    color: '#007AFF',
+    fontWeight: '600',
+  },
+  forgotPassword: {
+    color: '#007AFF',
+    fontSize: 14,
+  },
+  errorText: {
+    color: '#ff3b30',
+    marginBottom: 16,
+    textAlign: 'center',
+  },
+  dividerContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginVertical: 20,
+  },
+  divider: {
+    flex: 1,
+    height: 1,
+    backgroundColor: '#e0e0e0',
+  },
+  dividerText: {
+    marginHorizontal: 10,
+    color: '#999',
+    fontSize: 14,
+  },
+  googleButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#fff',
+    borderWidth: 1,
+    borderColor: '#e0e0e0',
+    borderRadius: 8,
+    padding: 14,
+    marginTop: 10,
+  },
+  googleIcon: {
+    width: 20,
+    height: 20,
+    marginRight: 12,
+  },
+  googleButtonText: {
+    color: '#444',
+    fontSize: 16,
+    fontWeight: '500',
+  },
+});
