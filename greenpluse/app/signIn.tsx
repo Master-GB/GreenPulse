@@ -476,7 +476,7 @@ export default function SignIn() {
           <TouchableOpacity
             onPress={handleGoogleSignIn}
             disabled={!request || loading}
-            className="flex-row items-center justify-center bg-white py-3 rounded-xl mb-6"
+            className="flex-row w-72 ml-10 items-center justify-center bg-white py-3 rounded-xl mb-6"
             activeOpacity={0.8}
           >
             <Image 
