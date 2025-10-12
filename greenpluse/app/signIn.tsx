@@ -4,6 +4,7 @@ import {
   Text, 
   TextInput, 
   TouchableOpacity, 
+  StyleSheet, 
   ActivityIndicator,
   KeyboardAvoidingView,
   Platform,
@@ -13,17 +14,19 @@ import {
   Animated,
   Easing,
   Dimensions,
+  Alert,
   Image
 } from 'react-native';
-import { useRouter } from 'expo-router';
+import { useRouter,Redirect } from 'expo-router';
 import { useAuth } from '../contexts/AuthContext';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Eye, EyeOff, Mail, Lock, AlertCircle } from 'lucide-react-native';
 import Svg, { Path, Circle, Rect, G, Defs, LinearGradient, Stop } from 'react-native-svg';
 import * as WebBrowser from 'expo-web-browser';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as Google from 'expo-auth-session/providers/google';
-import { auth } from '../config/firebaseConfig';
 import { GoogleAuthProvider, signInWithCredential } from 'firebase/auth';
+import { auth } from '../config/firebaseConfig';
 
 const { width, height } = Dimensions.get('window');
 
@@ -558,26 +561,30 @@ const AnimatedButton: React.FC<AnimatedButtonProps> = ({ onPress, disabled, isLo
   );
 };
 
-// Main Component
+// Required for Google OAuth
+WebBrowser.maybeCompleteAuthSession();
 export default function SignIn() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
-  const [showPassword, setShowPassword] = useState(false);
+  const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
-  const [isEmailTouched, setIsEmailTouched] = useState(false);
-  const [isPasswordTouched, setIsPasswordTouched] = useState(false);
-  const [errors, setErrors] = useState<FormErrors>({});
-  
   const { signIn } = useAuth();
   const router = useRouter();
+
+  const [isEmailTouched, setIsEmailTouched] = useState(false);
+  const [isPasswordTouched, setIsPasswordTouched] = useState(false);
+  const [errors, setErrors] = useState<{
+    email?: string;
+    password?: string;
+    general?: string;
+  }>({});
 
   // Google OAuth
   const [request, response, promptAsync] = Google.useAuthRequest({
     clientId: '440074217275-i3rhpdihp5dg6ga01bckb8jdc29l5759.apps.googleusercontent.com',
-    scopes: ['profile', 'email'],
-    redirectUri: 'https://auth.expo.io/@master-g/GreenPluse',
+    androidClientId: '440074217275-i3rhpdihp5dg6ga01bckb8jdc29l5759.apps.googleusercontent.com',
     iosClientId: '440074217275-i3rhpdihp5dg6ga01bckb8jdc29l5759.apps.googleusercontent.com',
-    androidClientId: '440074217275-i3rhpdihp5dg6ga01bckb8jdc29l5759.apps.googleusercontent.com'
+    scopes: ['profile', 'email'],
   });
 
   // Handle Google OAuth response
@@ -603,6 +610,7 @@ export default function SignIn() {
             if (userCredential.user) {
               // Small delay for better UX
               await new Promise(resolve => setTimeout(resolve, 500));
+              // Redirect to home after successful sign in
               router.push({
                 pathname: '/(root)',
                 params: { screen: '(MainTabs)' }
@@ -620,6 +628,13 @@ export default function SignIn() {
             }
             
             setErrors({ general: errorMessage });
+          } catch (error: any) {
+            console.error('Firebase auth error:', error);
+            Alert.alert('Authentication Error', error.message || 'Failed to sign in with Google. Please try again.');
+            setErrors(prev => ({ 
+              ...prev, 
+              general: error.message || 'Failed to sign in with Google. Please try again.' 
+            }));
           } finally {
             setLoading(false);
           }
@@ -674,6 +689,9 @@ export default function SignIn() {
   }, []);
 
   const clearError = useCallback((field: keyof FormErrors) => {
+  type FormErrorField = 'email' | 'password' | 'general';
+
+  const clearError = (field: FormErrorField) => {
     setErrors(prev => {
       const newErrors = { ...prev };
       delete newErrors[field];
@@ -685,13 +703,18 @@ export default function SignIn() {
     setErrors({});
   }, []);
 
-  const handleGoogleSignIn = async () => {
+  const handleGoogleSignInPress = async () => {
     try {
       await promptAsync();
     } catch (error: any) {
       setErrors(prev => ({
         ...prev,
         general: 'Unable to start Google sign-in. Please check your connection and try again.'
+      console.error('Google sign-in error:', error);
+      Alert.alert('Error', 'Failed to start Google sign in. Please try again.');
+      setErrors(prev => ({
+        ...prev,
+        general: error.message || 'Failed to start Google sign in. Please try again.'
       }));
     }
   };
@@ -793,6 +816,46 @@ export default function SignIn() {
     } catch (error) {
       // Catch any unexpected errors
       setErrors({ general: 'An unexpected error occurred. Please try again.' });
+    if (!email || !password) {
+      setError('Please fill in all fields');
+      return;
+    }
+
+    if (!email.includes('@')) {
+      setError('Please enter a valid email');
+      return;
+    }
+
+    setLoading(true);
+    setError('');
+
+    try {
+      await signIn(email, password);
+      
+      // Check if admin login
+      const ADMIN_EMAIL = 'admin@gmail.com';
+      const ADMIN_PASSWORD = '12345678';
+      
+      if (email.toLowerCase() === ADMIN_EMAIL && password === ADMIN_PASSWORD) {
+        // Set admin session
+        await AsyncStorage.setItem('admin_authenticated', 'true');
+        // Navigate to admin dashboard
+        router.replace('/AdminDashboard' as any);
+      } else {
+        // Regular user - navigate to main tabs
+        router.replace("/(root)/(MainTabs)");
+      }
+    } catch (error: any) {
+      let errorMessage = 'Failed to sign in. Please try again.';
+      
+      // Handle common Firebase Auth errors
+      if (error.code === 'auth/user-not-found' || error.code === 'auth/wrong-password') {
+        errorMessage = 'Invalid email or password';
+      } else if (error.code === 'auth/too-many-requests') {
+        errorMessage = 'Too many failed attempts. Please try again later.';
+      }
+      
+      setError(errorMessage);
     } finally {
       setLoading(false);
     }
@@ -860,13 +923,51 @@ export default function SignIn() {
             <Text className="text-gray-400 text-base">
               Sign in to continue to GreenPluse
             </Text>
+  return (
+    <KeyboardAvoidingView
+      style={styles.container}
+      behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+      keyboardVerticalOffset={Platform.OS === 'ios' ? 64 : 0}
+    >
+      <ScrollView 
+        contentContainerStyle={styles.scrollContainer}
+        keyboardShouldPersistTaps="handled"
+      >
+        <View style={styles.formContainer}>
+          <Text style={styles.title}>Welcome Back</Text>
+          <Text style={styles.subtitle}>Sign in to continue</Text>
+
+          {error ? <Text style={styles.errorText}>{error}</Text> : null}
+
+          <View style={styles.inputContainer}>
+            <Text style={styles.label}>Email</Text>
+            <TextInput
+              style={styles.input}
+              placeholder="Enter your email"
+              value={email}
+              onChangeText={setEmail}
+              autoCapitalize="none"
+              keyboardType="email-address"
+              autoComplete="email"
+              placeholderTextColor="#999"
+            />
           </View>
 
-          {/* Error Banner */}
-          {errors.general && (
-            <ErrorBanner 
-              message={errors.general} 
-              onDismiss={() => clearError('general')} 
+          <View style={styles.inputContainer}>
+            <View style={styles.labelContainer}>
+              <Text style={styles.label}>Password</Text>
+              <TouchableOpacity onPress={() => router.push('/forgotPassword')}>
+                <Text style={styles.forgotPassword}>Forgot?</Text>
+              </TouchableOpacity>
+            </View>
+            <TextInput
+              style={styles.input}
+              placeholder="Enter your password"
+              value={password}
+              onChangeText={setPassword}
+              secureTextEntry
+              autoComplete="current-password"
+              placeholderTextColor="#999"
             />
           )}
 
@@ -899,8 +1000,8 @@ export default function SignIn() {
             showSecureToggle={true}
             icon={<Lock size={20} color={COLORS.textSecondary} />}
           />
+          </View>
 
-          {/* Forgot Password */}
           <TouchableOpacity 
             onPress={handleForgotPassword}
             className="self-end mb-4"
@@ -922,6 +1023,21 @@ export default function SignIn() {
             <View className="flex-1 h-px bg-gray-700" />
             <Text className="text-gray-500 mx-4 text-sm">OR</Text>
             <View className="flex-1 h-px bg-gray-700" />
+            style={[styles.button, loading && styles.buttonDisabled]}
+            onPress={handleSignIn}
+            disabled={loading}
+          >
+            {loading ? (
+              <ActivityIndicator color="#fff" />
+            ) : (
+              <Text style={styles.buttonText}>Sign In</Text>
+            )}
+          </TouchableOpacity>
+
+          <View style={styles.dividerContainer}>
+            <View style={styles.divider} />
+            <Text style={styles.dividerText}>OR</Text>
+            <View style={styles.divider} />
           </View>
 
           {/* Google Sign In Button */}
@@ -931,9 +1047,8 @@ export default function SignIn() {
             disabled={!request || loading}                    
           >
             <Image 
-              source={{ uri: 'https://www.google.com/favicon.ico' }}
-              className="w-6 h-6 mr-3"
-              resizeMode="contain"
+              source={{ uri: 'https://www.google.com/favicon.ico' }} 
+              style={styles.googleIcon} 
             />
             <Text className="text-gray-800 text-base font-medium">
               {loading ? 'Signing in...' : 'Continue with Google'}
@@ -957,5 +1072,142 @@ export default function SignIn() {
         </ScrollView>
       </KeyboardAvoidingView>
     </SafeAreaView>
+            <Text style={styles.googleButtonText}>Sign in with Google</Text>
+          </TouchableOpacity>
+
+          <View style={styles.footer}>
+            <Text style={styles.footerText}>Don't have an account? </Text>
+            <TouchableOpacity onPress={() => router.push('/signUp')}>
+              <Text style={styles.signUpLink}>Sign up</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </ScrollView>
+    </KeyboardAvoidingView>
   );
 }
+
+const styles = StyleSheet.create({
+  container: {
+    flex: 1,
+    backgroundColor: '#fff',
+  },
+  scrollContainer: {
+    flexGrow: 1,
+    justifyContent: 'center',
+    padding: 20,
+  },
+  formContainer: {
+    width: '100%',
+    maxWidth: 400,
+    alignSelf: 'center',
+    padding: 20,
+  },
+  title: {
+    fontSize: 28,
+    fontWeight: 'bold',
+    color: '#333',
+    marginBottom: 8,
+    textAlign: 'center',
+  },
+  subtitle: {
+    fontSize: 16,
+    color: '#666',
+    marginBottom: 32,
+    textAlign: 'center',
+  },
+  inputContainer: {
+    marginBottom: 20,
+  },
+  labelContainer: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    marginBottom: 8,
+  },
+  label: {
+    fontSize: 14,
+    color: '#444',
+    fontWeight: '500',
+  },
+  input: {
+    backgroundColor: '#f8f8f8',
+    borderWidth: 1,
+    borderColor: '#e0e0e0',
+    borderRadius: 8,
+    padding: 14,
+    fontSize: 16,
+    color: '#333',
+  },
+  button: {
+    backgroundColor: '#007AFF',
+    padding: 16,
+    borderRadius: 8,
+    alignItems: 'center',
+    marginTop: 10,
+  },
+  buttonDisabled: {
+    opacity: 0.7,
+  },
+  buttonText: {
+    color: '#fff',
+    fontSize: 16,
+    fontWeight: '600',
+  },
+  footer: {
+    flexDirection: 'row',
+    justifyContent: 'center',
+    marginTop: 24,
+  },
+  footerText: {
+    color: '#666',
+  },
+  signUpLink: {
+    color: '#007AFF',
+    fontWeight: '600',
+  },
+  forgotPassword: {
+    color: '#007AFF',
+    fontSize: 14,
+  },
+  errorText: {
+    color: '#ff3b30',
+    marginBottom: 16,
+    textAlign: 'center',
+  },
+  dividerContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginVertical: 20,
+  },
+  divider: {
+    flex: 1,
+    height: 1,
+    backgroundColor: '#e0e0e0',
+  },
+  dividerText: {
+    marginHorizontal: 10,
+    color: '#999',
+    fontSize: 14,
+  },
+  googleButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#fff',
+    borderWidth: 1,
+    borderColor: '#e0e0e0',
+    borderRadius: 8,
+    padding: 14,
+    marginTop: 10,
+  },
+  googleIcon: {
+    width: 20,
+    height: 20,
+    marginRight: 12,
+  },
+  googleButtonText: {
+    color: '#444',
+    fontSize: 16,
+    fontWeight: '500',
+  },
+});

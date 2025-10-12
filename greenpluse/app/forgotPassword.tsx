@@ -10,6 +10,7 @@ import {
   Platform,
   ScrollView,
   Alert
+
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import { auth } from '../config/firebaseConfig';
@@ -40,14 +41,14 @@ export default function ForgotPassword() {
       // Send Firebase password reset email
       await sendPasswordResetEmail(auth, email);
 
-      console.log('=================================');
+      console.log('===================================');
       console.log('PASSWORD RESET EMAIL SENT');
       console.log('Email:', email);
       console.log('User will receive email with reset link');
-      console.log('=================================');
+      console.log('==================================');
 
       Alert.alert(
-        'Check Your Email!',
+        ' Please Check Your Email !',
         `A password reset link has been sent to ${email}. Please check your email and click the link to reset your password.`,
         [
           {

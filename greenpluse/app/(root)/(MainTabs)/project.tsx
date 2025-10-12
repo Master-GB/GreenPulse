@@ -8,7 +8,8 @@ import {
 } from 'lucide-react-native';
 import { icons } from '@/constants/icons';
 import { db } from '@/config/firebaseConfig';
-import { collection, query, where, getDocs } from 'firebase/firestore';
+import { collection, query, where, getDocs, doc, getDoc } from 'firebase/firestore';
+import { useAuth } from '@/contexts/AuthContext';
 
 type ProjectStatus = 'Published' | 'Funded' | 'In Progress' | 'Completed' | 'Approved';
 type FilterCategory = 'All' | 'Solar' | 'Wind' | 'Hydro';
@@ -35,21 +36,59 @@ const Project = () => {
   const [searchQuery, setSearchQuery] = useState('');
   const [projects, setProjects] = useState<ProjectType[]>([]);
   const [loading, setLoading] = useState(true);
+  const [userCoins, setUserCoins] = useState(0);
+  const [userCredits, setUserCredits] = useState(0);
 
   const router = useRouter();
+  const { user } = useAuth();
 
   useEffect(() => {
     fetchApprovedProjects();
+    loadUserData();
   }, []);
 
   // Refresh projects when screen comes into focus
   useFocusEffect(
     useCallback(() => {
       fetchApprovedProjects();
+      loadUserData();
     }, [])
   );
 
   const filters: FilterCategory[] = ['All', 'Solar', 'Wind', 'Hydro'];
+
+  // Load user's coin balance and credits
+  const loadUserData = useCallback(async () => {
+    try {
+      if (!user) return;
+
+      // Load coins from energy records
+      const recordsRef = collection(db, 'users', user.uid, 'energyRecords');
+      const snapshot = await getDocs(recordsRef);
+
+      let totalCoins = 0;
+      snapshot.forEach(doc => {
+        const data = doc.data();
+        if (data.coinValue) {
+          totalCoins += Number(data.coinValue);
+        }
+      });
+
+      setUserCoins(Math.round(totalCoins));
+
+      // Load credits from totalCredits collection
+      const creditsDoc = await getDoc(doc(db, 'totalCredits', user.uid));
+      if (creditsDoc.exists()) {
+        const creditsData = creditsDoc.data();
+        const totalCredits = Number(creditsData.totalReceived) || 0;
+        setUserCredits(Math.round(totalCredits));
+      } else {
+        setUserCredits(0);
+      }
+    } catch (error) {
+      console.error('Error loading user data:', error);
+    }
+  }, [user]);
 
   // Fetch approved projects from Firebase
   const fetchApprovedProjects = async () => {
@@ -150,17 +189,19 @@ const Project = () => {
     <SafeAreaView className="flex-1 bg-[#122119]" edges={['bottom']}>
       <StatusBar barStyle="light-content" />
 
-      {/* Header */}
-      <View className="flex-row justify-between items-center px-5 pt-20">
+    <View className="flex-row justify-between items-center px-5 py-1 mt-16">
         <TouchableOpacity>
           <ArrowLeft size={28} color="white" />
         </TouchableOpacity>
         <Text className="text-white text-2xl font-bold ml-8">Projects</Text>
-        <TouchableOpacity className='bg-[#2a3e3e] rounded-full px-3 py-2 flex-row items-center gap-2'>
-            <Image source={icons.coinH}  className="size-5 mb-1" />
-            <Text className="text-white font-semibold">120</Text>
-            <Text className="text-gray-400">/5</Text>
-          </TouchableOpacity>
+        <TouchableOpacity 
+          className='bg-[#2a3e3e] rounded-full px-3 py-2 flex-row items-center gap-2'
+          onPress={() => router.push('/(root)/wallet')}
+        >
+          <Image source={icons.coinH} className="size-5 mb-1" />
+          <Text className="text-white font-semibold">{userCoins.toLocaleString()}</Text>
+          <Text className="text-white font-semibold">/{userCredits.toLocaleString()}</Text>
+        </TouchableOpacity>
       </View>
 
       {/* Search Bar */}
@@ -212,7 +253,7 @@ const Project = () => {
       {/* Projects List */}
       <ScrollView
         className="flex-1 px-5"
-        contentContainerStyle={{ paddingBottom: 20 }}
+        contentContainerStyle={{ paddingBottom: 50, }}
         showsVerticalScrollIndicator={false}
       >
         {loading ? (

@@ -25,9 +25,12 @@ const Profile = () => {
   const router = useRouter();
   const [profile, setProfile] = useState<UserProfile | null>(null);
   const [loading, setLoading] = useState(true);
+  const [userCoins, setUserCoins] = useState(0);
+  const [userCredits, setUserCredits] = useState(0);
 
   useEffect(() => {
     fetchUserProfile();
+    loadUserData();
   }, []);
 
   const fetchUserProfile = async () => {
@@ -137,6 +140,40 @@ const Profile = () => {
     ]);
   };
 
+  // Load user's coin balance and credits
+  const loadUserData = async () => {
+    try {
+      const user = auth.currentUser;
+      if (!user) return;
+
+      // Load coins from energy records
+      const recordsRef = collection(db, 'users', user.uid, 'energyRecords');
+      const snapshot = await getDocs(recordsRef);
+
+      let totalCoins = 0;
+      snapshot.forEach(doc => {
+        const data = doc.data();
+        if (data.coinValue) {
+          totalCoins += Number(data.coinValue);
+        }
+      });
+
+      setUserCoins(Math.round(totalCoins));
+
+      // Load credits from totalCredits collection
+      const creditsDoc = await getDoc(doc(db, 'totalCredits', user.uid));
+      if (creditsDoc.exists()) {
+        const creditsData = creditsDoc.data();
+        const totalCredits = Number(creditsData.totalReceived) || 0;
+        setUserCredits(Math.round(totalCredits));
+      } else {
+        setUserCredits(0);
+      }
+    } catch (error) {
+      console.error('Error loading user data:', error);
+    }
+  };
+
   if (loading) {
     return (
       <SafeAreaView style={{ flex: 1, backgroundColor: '#122119' }}>
@@ -162,7 +199,6 @@ const Profile = () => {
     <SafeAreaView className="flex-1 bg-[#122119]">
       <StatusBar barStyle="light-content" />
 
-      {/* Header */}
       <View className="flex-row justify-between items-center px-5 py-1">
         <TouchableOpacity>
           <ArrowLeft size={28} color="white" />
@@ -173,13 +209,13 @@ const Profile = () => {
           onPress={() => router.push('/(root)/wallet' as any)}
         >
           <Image source={icons.coinH} className="size-5 mb-1" />
-          <Text className="text-white font-semibold">120</Text>
-          <Text className="text-gray-400">/5</Text>
+          <Text className="text-white font-semibold">{userCoins.toLocaleString()}</Text>
+          <Text className="text-white font-semibold">/{userCredits.toLocaleString()}</Text>
         </TouchableOpacity>
       </View>
 
+      {/* User Profile Content */}
       <ScrollView className="flex-1" contentContainerStyle={{ paddingBottom: 40 }} showsVerticalScrollIndicator={false}>
-        
         <View className="bg-[#2a3e3e] mx-5 mt-5 rounded-2xl p-6 items-center">
           <View className="w-24 h-24 rounded-full bg-[#1AE57D] justify-center items-center mb-4">
             {profile.photoURL ? (
