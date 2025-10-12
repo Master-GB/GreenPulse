@@ -161,7 +161,7 @@ export default function Donate() {
       <StatusBar barStyle="light-content" />
 
       <View className="flex-row justify-between items-center px-5 py-1">
-        <TouchableOpacity>
+        <TouchableOpacity onPress={() => router.back()}>
           <ArrowLeft size={28} color="white" />
         </TouchableOpacity>
         <Text className="text-white text-2xl font-bold ml-8">Donation</Text>

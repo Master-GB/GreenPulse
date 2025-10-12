@@ -78,7 +78,7 @@ function AppHeader({ title }: HeaderProps) {
         />
         <View className="flex-row items-baseline ml-1">
           <Text className="text-white font-semibold">{userCoins}</Text>
-          <Text className="text-gray-400 text-sm">/{userCredits}</Text>
+          <Text className="text-white font-semibold">/{userCredits}</Text>
         </View>
       </TouchableOpacity>
     </View>

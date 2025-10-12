@@ -289,10 +289,12 @@ export default function SignIn() {
             <View style={styles.divider} />
           </View>
 
-          <TouchableOpacity 
-            style={[styles.googleButton, loading && styles.buttonDisabled]}
-            onPress={handleGoogleSignInPress}
-            disabled={loading}
+          {/* Google Sign In Button */}
+          <TouchableOpacity
+            onPress={handleGoogleSignIn}
+            disabled={!request || loading}
+            className="flex-row w-72 ml-10 items-center justify-center bg-white py-3 rounded-xl mb-6"
+            activeOpacity={0.8}
           >
             <Image 
               source={{ uri: 'https://www.google.com/favicon.ico' }} 
