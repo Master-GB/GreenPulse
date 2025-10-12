@@ -104,6 +104,29 @@ export default function RootLayout() {
         <Stack.Screen name="(MainTabs)" options={{ headerShown: false }} />
 
         <Stack.Screen
+          name="project"
+          options={{
+            headerShown: true,
+            headerTitle: () => <AppHeader title="Projects" />,
+            headerStyle: {
+              backgroundColor: "#122119",
+            },
+            headerTintColor: "#fff",
+            animation: "slide_from_right",
+            gestureEnabled: true,
+            fullScreenGestureEnabled: true,
+            contentStyle: { backgroundColor: "#122119" },
+            presentation: "card",
+            headerShadowVisible: false,
+            headerTransparent: false,
+            headerBackground: () => (
+              <View style={{ flex: 1, backgroundColor: "#122119" }} />
+            ),
+            animationTypeForReplace: "push",
+          }}
+        />
+
+        <Stack.Screen
           name="donateNow"
           options={{
             headerShown: true,
@@ -551,9 +574,32 @@ export default function RootLayout() {
           }}
         />
 
+        
+        <Stack.Screen
+          name="profile"
+          options={{
+            headerShown: true,
+            headerTitle: () => <AppHeader title="Profile" />,
+            headerStyle: {
+              backgroundColor: "#122119",
+            },
+            headerTintColor: "#fff",
+            animation: "slide_from_right",
+            gestureEnabled: true,
+            fullScreenGestureEnabled: true,
+            contentStyle: { backgroundColor: "#122119" },
+            presentation: "card",
+            headerShadowVisible: false,
+            headerTransparent: false,
+            headerBackground: () => (
+              <View style={{ flex: 1, backgroundColor: "#122119" }} />
+            ),
+            animationTypeForReplace: "push",
+          }}
+        />
+
       </Stack>
     </View>
    </ProtectedRoute>
   );
 }
-

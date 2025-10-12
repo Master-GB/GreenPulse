@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { 
   View, 
   Text, 
@@ -8,12 +8,21 @@ import {
   ActivityIndicator,
   KeyboardAvoidingView,
   Platform,
-  ScrollView
+  ScrollView,
+  Alert,
+  Image
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useAuth } from '../contexts/AuthContext';
 import { Redirect } from 'expo-router';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import * as Google from 'expo-auth-session/providers/google';
+import * as WebBrowser from 'expo-web-browser';
+import { GoogleAuthProvider, signInWithCredential } from 'firebase/auth';
+import { auth } from '../config/firebaseConfig';
+
+// Required for Google OAuth
+WebBrowser.maybeCompleteAuthSession();
 
 export default function SignIn() {
   const [email, setEmail] = useState('');
@@ -23,13 +32,20 @@ export default function SignIn() {
   const { signIn } = useAuth();
   const router = useRouter();
 
+  const [isEmailTouched, setIsEmailTouched] = useState(false);
+  const [isPasswordTouched, setIsPasswordTouched] = useState(false);
+  const [errors, setErrors] = useState<{
+    email?: string;
+    password?: string;
+    general?: string;
+  }>({});
+
   // Google OAuth
   const [request, response, promptAsync] = Google.useAuthRequest({
     clientId: '440074217275-i3rhpdihp5dg6ga01bckb8jdc29l5759.apps.googleusercontent.com',
-    scopes: ['profile', 'email'],
-    redirectUri: 'https://auth.expo.io/@master-g/GreenPluse',
+    androidClientId: '440074217275-i3rhpdihp5dg6ga01bckb8jdc29l5759.apps.googleusercontent.com',
     iosClientId: '440074217275-i3rhpdihp5dg6ga01bckb8jdc29l5759.apps.googleusercontent.com',
-    androidClientId: '440074217275-i3rhpdihp5dg6ga01bckb8jdc29l5759.apps.googleusercontent.com'
+    scopes: ['profile', 'email'],
   });
 
   // Handle Google OAuth response
@@ -52,18 +68,18 @@ export default function SignIn() {
               // Wait a moment to ensure the auth state is updated
               await new Promise(resolve => setTimeout(resolve, 500));
               // Redirect to home after successful sign in
-             router.push({
-  pathname: '/(root)',
-  params: { screen: '(MainTabs)' }
-} as any);
+              router.push({
+                pathname: '/(root)',
+                params: { screen: '(MainTabs)' }
+              } as any);
             }
             
-          } catch (error) {
+          } catch (error: any) {
             console.error('Firebase auth error:', error);
-            Alert.alert('Authentication Error', 'Failed to sign in with Google. Please try again.');
+            Alert.alert('Authentication Error', error.message || 'Failed to sign in with Google. Please try again.');
             setErrors(prev => ({ 
               ...prev, 
-              general: 'Failed to sign in with Google. Please try again.' 
+              general: error.message || 'Failed to sign in with Google. Please try again.' 
             }));
           } finally {
             setLoading(false);
@@ -82,7 +98,7 @@ export default function SignIn() {
     if (response) {
       handleGoogleAuth();
     }
-  }, [response, router, signInWithCredential]);
+  }, [response, router]);
 
   const validateEmail = (emailToValidate: string): boolean => {
     if (!emailToValidate.trim()) {
@@ -110,7 +126,9 @@ export default function SignIn() {
     return true;
   };
 
-  const clearError = (field: keyof FormErrors) => {
+  type FormErrorField = 'email' | 'password' | 'general';
+
+  const clearError = (field: FormErrorField) => {
     setErrors(prev => {
       const newErrors = { ...prev };
       delete newErrors[field];
@@ -122,14 +140,15 @@ export default function SignIn() {
     setErrors({});
   };
 
-  const handleGoogleSignIn = async () => {
+  const handleGoogleSignInPress = async () => {
     try {
       await promptAsync();
-    } catch (error) {
+    } catch (error: any) {
       console.error('Google sign-in error:', error);
+      Alert.alert('Error', 'Failed to start Google sign in. Please try again.');
       setErrors(prev => ({
         ...prev,
-        general: 'Failed to start Google sign-in. Please try again.'
+        general: error.message || 'Failed to start Google sign in. Please try again.'
       }));
     }
   };
@@ -264,6 +283,24 @@ export default function SignIn() {
             )}
           </TouchableOpacity>
 
+          <View style={styles.dividerContainer}>
+            <View style={styles.divider} />
+            <Text style={styles.dividerText}>OR</Text>
+            <View style={styles.divider} />
+          </View>
+
+          <TouchableOpacity 
+            style={[styles.googleButton, loading && styles.buttonDisabled]}
+            onPress={handleGoogleSignInPress}
+            disabled={loading}
+          >
+            <Image 
+              source={{ uri: 'https://www.google.com/favicon.ico' }} 
+              style={styles.googleIcon} 
+            />
+            <Text style={styles.googleButtonText}>Sign in with Google</Text>
+          </TouchableOpacity>
+
           <View style={styles.footer}>
             <Text style={styles.footerText}>Don't have an account? </Text>
             <TouchableOpacity onPress={() => router.push('/signUp')}>
@@ -362,5 +399,41 @@ const styles = StyleSheet.create({
     color: '#ff3b30',
     marginBottom: 16,
     textAlign: 'center',
+  },
+  dividerContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginVertical: 20,
+  },
+  divider: {
+    flex: 1,
+    height: 1,
+    backgroundColor: '#e0e0e0',
+  },
+  dividerText: {
+    marginHorizontal: 10,
+    color: '#999',
+    fontSize: 14,
+  },
+  googleButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#fff',
+    borderWidth: 1,
+    borderColor: '#e0e0e0',
+    borderRadius: 8,
+    padding: 14,
+    marginTop: 10,
+  },
+  googleIcon: {
+    width: 20,
+    height: 20,
+    marginRight: 12,
+  },
+  googleButtonText: {
+    color: '#444',
+    fontSize: 16,
+    fontWeight: '500',
   },
 });

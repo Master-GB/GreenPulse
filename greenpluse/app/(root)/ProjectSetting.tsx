@@ -5,13 +5,23 @@ import { ArrowLeft, Sun, DollarSign, MapPin, Award, Folder, Users, Settings, Shi
 import { useRouter } from 'expo-router';
 import { icons } from '@/constants/icons';
 import { isAdmin } from '@/utils/adminAuth';
+import { auth, db } from '@/config/firebaseConfig';
+import { collection, query, where, getDocs, doc, getDoc } from 'firebase/firestore';
+import { nftService } from '@/services/nftService';
 
 const ProjectsSetting = () => {
   const router = useRouter();
   const [showAdminOption, setShowAdminOption] = useState(false);
+  const [impactData, setImpactData] = useState({
+    projects: 0,
+    donated: 0,
+    certificates: 0
+  });
+  const [loadingImpact, setLoadingImpact] = useState(true);
 
   useEffect(() => {
     setShowAdminOption(isAdmin());
+    loadImpactData();
   }, []);
 
   const menuItems = [
@@ -125,6 +135,62 @@ const ProjectsSetting = () => {
 
   const displayMenuItems = showAdminOption ? [adminMenuItem, ...menuItems] : menuItems;
 
+  const loadImpactData = async () => {
+    try {
+      const user = auth.currentUser;
+      if (!user) {
+        setLoadingImpact(false);
+        return;
+      }
+
+      let projects = 0;
+      let donated = 0;
+      let certificates = 0;
+
+      // Get user's projects count
+      try {
+        const projectsRef = collection(db, 'projectRequests');
+        const projectsQuery = query(projectsRef, where('userId', '==', user.uid));
+        const projectsSnapshot = await getDocs(projectsQuery);
+        projects = projectsSnapshot.size;
+      } catch (error) {
+        console.log('Could not fetch projects count:', error);
+      }
+
+      // Get user's total donated amount
+      try {
+        const donationsRef = collection(db, 'ProjectDonation');
+        const donationsQuery = query(donationsRef, where('userId', '==', user.uid));
+        const donationsSnapshot = await getDocs(donationsQuery);
+
+        donationsSnapshot.forEach((doc) => {
+          const data = doc.data();
+          donated += data.amount || 0;
+        });
+      } catch (error) {
+        console.log('Could not fetch donations:', error);
+      }
+
+      // Get user's NFT certificates count
+      try {
+        const userNFTs = await nftService.getUserNFTs();
+        certificates = userNFTs.length;
+      } catch (error) {
+        console.log('Could not fetch NFT certificates:', error);
+      }
+
+      setImpactData({
+        projects,
+        donated,
+        certificates
+      });
+    } catch (error) {
+      console.error('Error loading impact data:', error);
+    } finally {
+      setLoadingImpact(false);
+    }
+  };
+
   return (
     <SafeAreaView className="flex-1 bg-[#122119]" edges={['bottom']}>
       <StatusBar barStyle="light-content" />
@@ -235,20 +301,37 @@ const ProjectsSetting = () => {
             }}>
               Your Impact
             </Text>
-            <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
-              <View style={{ alignItems: 'center' }}>
-                <Text style={{ color: '#1AE57D', fontSize: 24, fontWeight: '800' }}>12</Text>
-                <Text style={{ color: '#9ca3af', fontSize: 12, marginTop: 4 }}>Projects</Text>
+            {loadingImpact ? (
+              <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
+                <View style={{ alignItems: 'center' }}>
+                  <Text style={{ color: '#1AE57D', fontSize: 24, fontWeight: '800' }}>...</Text>
+                  <Text style={{ color: '#9ca3af', fontSize: 12, marginTop: 4 }}>Projects</Text>
+                </View>
+                <View style={{ alignItems: 'center' }}>
+                  <Text style={{ color: '#1AE57D', fontSize: 24, fontWeight: '800' }}>...</Text>
+                  <Text style={{ color: '#9ca3af', fontSize: 12, marginTop: 4 }}>Donated</Text>
+                </View>
+                <View style={{ alignItems: 'center' }}>
+                  <Text style={{ color: '#1AE57D', fontSize: 24, fontWeight: '800' }}>...</Text>
+                  <Text style={{ color: '#9ca3af', fontSize: 12, marginTop: 4 }}>Certificates</Text>
+                </View>
               </View>
-              <View style={{ alignItems: 'center' }}>
-                <Text style={{ color: '#1AE57D', fontSize: 24, fontWeight: '800' }}>$2.4K</Text>
-                <Text style={{ color: '#9ca3af', fontSize: 12, marginTop: 4 }}>Donated</Text>
+            ) : (
+              <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
+                <View style={{ alignItems: 'center' }}>
+                  <Text style={{ color: '#1AE57D', fontSize: 24, fontWeight: '800' }}>{impactData.projects}</Text>
+                  <Text style={{ color: '#9ca3af', fontSize: 12, marginTop: 4 }}>Projects</Text>
+                </View>
+                <View style={{ alignItems: 'center' }}>
+                  <Text style={{ color: '#1AE57D', fontSize: 24, fontWeight: '800' }}>LKR {impactData.donated.toLocaleString()}</Text>
+                  <Text style={{ color: '#9ca3af', fontSize: 12, marginTop: 4 }}>Donated</Text>
+                </View>
+                <View style={{ alignItems: 'center' }}>
+                  <Text style={{ color: '#1AE57D', fontSize: 24, fontWeight: '800' }}>{impactData.certificates}</Text>
+                  <Text style={{ color: '#9ca3af', fontSize: 12, marginTop: 4 }}>Certificates</Text>
+                </View>
               </View>
-              <View style={{ alignItems: 'center' }}>
-                <Text style={{ color: '#1AE57D', fontSize: 24, fontWeight: '800' }}>8</Text>
-                <Text style={{ color: '#9ca3af', fontSize: 12, marginTop: 4 }}>Certificates</Text>
-              </View>
-            </View>
+            )}
           </View>
         </ScrollView>
     </SafeAreaView>
