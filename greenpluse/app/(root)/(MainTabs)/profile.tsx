@@ -251,7 +251,7 @@ const Profile = () => {
           </TouchableOpacity>
 
           <TouchableOpacity
-            className="bg-[#ef444420] py-4 px-5 rounded-2xl flex-row items-center border border-[#ef4444]"
+            className="bg-[#ef444420] mb-10 py-4 px-5 rounded-2xl flex-row items-center border border-[#ef4444]"
             onPress={handleLogout}
             activeOpacity={0.8}
           >
