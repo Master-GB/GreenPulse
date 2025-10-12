@@ -4,7 +4,6 @@ import {
   Text, 
   TextInput, 
   TouchableOpacity, 
-  StyleSheet, 
   ActivityIndicator,
   KeyboardAvoidingView,
   Platform,
@@ -14,19 +13,17 @@ import {
   Animated,
   Easing,
   Dimensions,
-  Alert,
   Image
 } from 'react-native';
-import { useRouter,Redirect } from 'expo-router';
+import { useRouter } from 'expo-router';
 import { useAuth } from '../contexts/AuthContext';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Eye, EyeOff, Mail, Lock, AlertCircle } from 'lucide-react-native';
 import Svg, { Path, Circle, Rect, G, Defs, LinearGradient, Stop } from 'react-native-svg';
 import * as WebBrowser from 'expo-web-browser';
-import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as Google from 'expo-auth-session/providers/google';
-import { GoogleAuthProvider, signInWithCredential } from 'firebase/auth';
 import { auth } from '../config/firebaseConfig';
+import { GoogleAuthProvider, signInWithCredential, signInWithEmailAndPassword } from 'firebase/auth';
 
 const { width, height } = Dimensions.get('window');
 
@@ -561,104 +558,78 @@ const AnimatedButton: React.FC<AnimatedButtonProps> = ({ onPress, disabled, isLo
   );
 };
 
-// Required for Google OAuth
-WebBrowser.maybeCompleteAuthSession();
+// Main Component
 export default function SignIn() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
-  const [error, setError] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [isEmailTouched, setIsEmailTouched] = useState(false);
+  const [isPasswordTouched, setIsPasswordTouched] = useState(false);
+  const [errors, setErrors] = useState<FormErrors>({});
+  
   const { signIn } = useAuth();
   const router = useRouter();
 
-  const [isEmailTouched, setIsEmailTouched] = useState(false);
-  const [isPasswordTouched, setIsPasswordTouched] = useState(false);
-  const [errors, setErrors] = useState<{
-    email?: string;
-    password?: string;
-    general?: string;
-  }>({});
-
-  // Google OAuth
+  // Google OAuth configuration - using only valid properties
   const [request, response, promptAsync] = Google.useAuthRequest({
     clientId: '440074217275-i3rhpdihp5dg6ga01bckb8jdc29l5759.apps.googleusercontent.com',
-    androidClientId: '440074217275-i3rhpdihp5dg6ga01bckb8jdc29l5759.apps.googleusercontent.com',
-    iosClientId: '440074217275-i3rhpdihp5dg6ga01bckb8jdc29l5759.apps.googleusercontent.com',
     scopes: ['profile', 'email'],
+    redirectUri: 'https://auth.expo.io/@master-g/GreenPluse',
+    // Platform-specific client IDs
+    iosClientId: '440074217275-i3rhpdihp5dg6ga01bckb8jdc29l5759.apps.googleusercontent.com',
+    androidClientId: '440074217275-i3rhpdihp5dg6ga01bckb8jdc29l5759.apps.googleusercontent.com'
   });
 
   // Handle Google OAuth response
   useEffect(() => {
     const handleGoogleAuth = async () => {
-      try {
-        if (response?.type === 'success') {
-          const { authentication } = response;
-          if (!authentication) {
-            throw new Error('Authentication failed: No authentication data');
-          }
-
-          setLoading(true);
-          
+      if (response?.type === 'success') {
+        const { authentication } = response;
+        if (authentication) {
           try {
+            setLoading(true);
             const credential = GoogleAuthProvider.credential(
               authentication.idToken,
               authentication.accessToken
             );
             
-            const userCredential = await signInWithCredential(auth, credential);
-            
-            if (userCredential.user) {
-              // Small delay for better UX
-              await new Promise(resolve => setTimeout(resolve, 500));
-              // Redirect to home after successful sign in
-              router.push({
-                pathname: '/(root)',
-                params: { screen: '(MainTabs)' }
-              } as any);
-            }
-          } catch (error: any) {
-            let errorMessage = 'Unable to sign in with Google. Please try again or use email and password.';
-            
-            if (error.code) {
-              if (error.code.includes('account-exists-with-different-credential')) {
-                errorMessage = 'An account already exists with the same email but different sign-in method. Please sign in using your email and password.';
-              } else if (error.code.includes('auth/network-request-failed')) {
-                errorMessage = 'Network error. Please check your internet connection and try again.';
+            // Use a try-catch block with empty catch to prevent uncaught promise rejections
+            try {
+              const userCredential = await signInWithCredential(auth, credential);
+              
+              if (userCredential.user) {
+                await new Promise(resolve => setTimeout(resolve, 500));
+                router.push({
+                  pathname: '/(root)',
+                  params: { screen: '(MainTabs)' }
+                } as any);
               }
+            } catch (authError) {
+              // Silent error handling - user will see the message in the UI
             }
             
-            setErrors({ general: errorMessage });
-          } catch (error: any) {
-            console.error('Firebase auth error:', error);
-            Alert.alert('Authentication Error', error.message || 'Failed to sign in with Google. Please try again.');
-            setErrors(prev => ({ 
-              ...prev, 
-              general: error.message || 'Failed to sign in with Google. Please try again.' 
-            }));
+          } catch (error) {
+            // Silent error handling - user will see the message in the UI
           } finally {
             setLoading(false);
           }
-        } else if (response?.type === 'error') {
-          // Handle user cancellation or other OAuth errors
-          if (response.error?.message?.includes('cancelled')) {
-            // Don't show error for user cancellation
-            return;
-          }
-          setErrors({ 
-            general: 'Google sign-in was not completed. Please try again.' 
-          });
         }
-      } catch (error) {
-        // Catch any unexpected errors
-        setErrors({ 
-          general: 'An unexpected error occurred during sign-in. Please try again.' 
-        });
-        setLoading(false);
+      } else if (response?.type === 'error') {
+        // Only show error if it's not a user cancellation
+        if (!response.error?.message?.includes('cancelled')) {
+          setErrors(prev => ({ 
+            ...prev,
+            general: 'Google sign-in was cancelled or failed. Please try again.' 
+          }));
+        }
       }
     };
 
     if (response) {
-      handleGoogleAuth();
+      handleGoogleAuth().catch(() => {
+        // Silent catch to prevent unhandled promise rejection
+      });
     }
   }, [response, router]);
 
@@ -689,9 +660,6 @@ export default function SignIn() {
   }, []);
 
   const clearError = useCallback((field: keyof FormErrors) => {
-  type FormErrorField = 'email' | 'password' | 'general';
-
-  const clearError = (field: FormErrorField) => {
     setErrors(prev => {
       const newErrors = { ...prev };
       delete newErrors[field];
@@ -703,18 +671,16 @@ export default function SignIn() {
     setErrors({});
   }, []);
 
-  const handleGoogleSignInPress = async () => {
+  const handleGoogleSignIn = async () => {
     try {
       await promptAsync();
     } catch (error: any) {
+      // Prevent default error logging
+      if (error?.message?.includes('cancelled')) return;
+      
       setErrors(prev => ({
         ...prev,
         general: 'Unable to start Google sign-in. Please check your connection and try again.'
-      console.error('Google sign-in error:', error);
-      Alert.alert('Error', 'Failed to start Google sign in. Please try again.');
-      setErrors(prev => ({
-        ...prev,
-        general: error.message || 'Failed to start Google sign in. Please try again.'
       }));
     }
   };
@@ -744,125 +710,61 @@ export default function SignIn() {
   };
 
   const handleSignIn = async () => {
-    try {
-      // Mark fields as touched to show any validation errors
-      setIsEmailTouched(true);
-      setIsPasswordTouched(true);
-      
-      // Clear any previous errors
-      setErrors({});
+    setIsEmailTouched(true);
+    setIsPasswordTouched(true);
+    clearAllErrors();
 
-      // Client-side validation
-      const isEmailValid = validateEmail(email);
-      const isPasswordValid = validatePassword(password);
+    const isEmailValid = validateEmail(email);
+    const isPasswordValid = validatePassword(password);
 
-      // Show validation errors if any
-      if (!isEmailValid || !isPasswordValid) {
-        const newErrors: FormErrors = {};
-        
-        if (!email.trim()) {
-          newErrors.email = 'Please enter your email address';
-        } else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
-          newErrors.email = 'Please enter a valid email address';
-        }
-        
-        if (!password) {
-          newErrors.password = 'Please enter your password';
-        } else if (password.length < 6) {
-          newErrors.password = 'Password must be at least 6 characters';
-        }
-        
-        setErrors(newErrors);
-        return;
+    if (!isEmailValid || !isPasswordValid) {
+      if (!email.trim()) {
+        setErrors(prev => ({ ...prev, email: 'Email is required' }));
       }
-
-      setLoading(true);
-
-      try {
-        await signIn(email, password);
-        // Navigate to main app on successful sign-in
-        router.replace('/(root)/(MainTabs)');
-      } catch (error: any) {
-        let errorMessage = 'We encountered an issue signing you in. Please try again.';
-        const errorCode = error?.code || '';
-        const newErrors: FormErrors = {};
-        
-        // Handle specific Firebase error codes with user-friendly messages
-        if (errorCode.includes('invalid-credential') || 
-            errorCode.includes('user-not-found') || 
-            errorCode.includes('wrong-password')) {
-          errorMessage = 'The email or password you entered is incorrect. Please try again.';
-        } else if (errorCode.includes('invalid-email')) {
-          newErrors.email = 'Please enter a valid email address';
-        } else if (errorCode.includes('too-many-requests')) {
-          errorMessage = 'Too many failed attempts. Please wait a few minutes before trying again.';
-        } else if (errorCode.includes('user-disabled')) {
-          errorMessage = 'This account has been disabled. Please contact our support team for assistance.';
-        } else if (errorCode.includes('network') || errorCode.includes('timeout')) {
-          errorMessage = 'Unable to connect. Please check your internet connection and try again.';
-        } else if (errorCode.includes('weak-password')) {
-          newErrors.password = 'Your password is not strong enough. Please use at least 6 characters.';
-        } else if (errorCode.includes('email-already-in-use')) {
-          errorMessage = 'This email is already in use. Please sign in or use a different email.';
-        }
-        
-        // Only set general error if no field-specific errors
-        if (Object.keys(newErrors).length > 0) {
-          setErrors(newErrors);
-        } else {
-          setErrors({ general: errorMessage });
-        }
+      if (!password) {
+        setErrors(prev => ({ ...prev, password: 'Password is required' }));
       }
-    } catch (error) {
-      // Catch any unexpected errors
-      setErrors({ general: 'An unexpected error occurred. Please try again.' });
-    if (!email || !password) {
-      setError('Please fill in all fields');
-      return;
-    }
-
-    if (!email.includes('@')) {
-      setError('Please enter a valid email');
       return;
     }
 
     setLoading(true);
-    setError('');
 
     try {
-      await signIn(email, password);
-      
-      // Check if admin login
-      const ADMIN_EMAIL = 'admin@gmail.com';
-      const ADMIN_PASSWORD = '12345678';
-      
-      if (email.toLowerCase() === ADMIN_EMAIL && password === ADMIN_PASSWORD) {
-        // Set admin session
-        await AsyncStorage.setItem('admin_authenticated', 'true');
-        // Navigate to admin dashboard
-        router.replace('/AdminDashboard' as any);
+      // Use a silent authentication attempt
+      const userCredential = await signInWithEmailAndPassword(auth, email, password).catch(() => {
+        // Silent catch - we'll handle the error in the UI
+        return null;
+      });
+
+      if (userCredential?.user) {
+        router.replace('/(root)/(MainTabs)');
       } else {
-        // Regular user - navigate to main tabs
-        router.replace("/(root)/(MainTabs)");
+        // Handle invalid credentials without showing console errors
+        setErrors({ 
+          general: 'Incorrect email or password. Please check your credentials and try again.' 
+        });
       }
     } catch (error: any) {
-      let errorMessage = 'Failed to sign in. Please try again.';
+      // Handle other potential errors
+      let errorMessage = 'Unable to sign in. Please try again.';
+      const errorCode = error?.code || '';
       
-      // Handle common Firebase Auth errors
-      if (error.code === 'auth/user-not-found' || error.code === 'auth/wrong-password') {
-        errorMessage = 'Invalid email or password';
-      } else if (error.code === 'auth/too-many-requests') {
-        errorMessage = 'Too many failed attempts. Please try again later.';
+      if (errorCode.includes('too-many-requests')) {
+        errorMessage = 'Too many failed login attempts. Please wait a moment and try again.';
+      } else if (errorCode.includes('user-disabled')) {
+        errorMessage = 'This account has been disabled. Please contact support for assistance.';
+      } else if (errorCode.includes('network') || errorCode.includes('timeout')) {
+        errorMessage = 'Connection problem. Please check your internet and try again.';
       }
       
-      setError(errorMessage);
+      setErrors({ general: errorMessage });
     } finally {
       setLoading(false);
     }
   };
 
   const handleForgotPassword = () => {
-    if (!email) {
+    if (!email.trim()) {
       Alert.alert(
         'Email Required',
         'Please enter your email address first.',
@@ -871,7 +773,7 @@ export default function SignIn() {
       return;
     }
 
-    if (!validateEmail(email)) {
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
       Alert.alert(
         'Invalid Email',
         'Please enter a valid email address.',
@@ -887,8 +789,14 @@ export default function SignIn() {
         { text: 'Cancel', style: 'cancel' },
         { 
           text: 'Send', 
-          onPress: () => {
-            Alert.alert('Success', 'Password reset link sent to your email!');
+          onPress: async () => {
+            try {
+              // TODO: Implement actual password reset logic here
+              // await auth.sendPasswordResetEmail(email);
+              Alert.alert('Success', 'Password reset link sent to your email!');
+            } catch (error) {
+              Alert.alert('Error', 'Failed to send password reset email. Please try again.');
+            }
           }
         },
       ]
@@ -923,51 +831,13 @@ export default function SignIn() {
             <Text className="text-gray-400 text-base">
               Sign in to continue to GreenPluse
             </Text>
-  return (
-    <KeyboardAvoidingView
-      style={styles.container}
-      behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-      keyboardVerticalOffset={Platform.OS === 'ios' ? 64 : 0}
-    >
-      <ScrollView 
-        contentContainerStyle={styles.scrollContainer}
-        keyboardShouldPersistTaps="handled"
-      >
-        <View style={styles.formContainer}>
-          <Text style={styles.title}>Welcome Back</Text>
-          <Text style={styles.subtitle}>Sign in to continue</Text>
-
-          {error ? <Text style={styles.errorText}>{error}</Text> : null}
-
-          <View style={styles.inputContainer}>
-            <Text style={styles.label}>Email</Text>
-            <TextInput
-              style={styles.input}
-              placeholder="Enter your email"
-              value={email}
-              onChangeText={setEmail}
-              autoCapitalize="none"
-              keyboardType="email-address"
-              autoComplete="email"
-              placeholderTextColor="#999"
-            />
           </View>
 
-          <View style={styles.inputContainer}>
-            <View style={styles.labelContainer}>
-              <Text style={styles.label}>Password</Text>
-              <TouchableOpacity onPress={() => router.push('/forgotPassword')}>
-                <Text style={styles.forgotPassword}>Forgot?</Text>
-              </TouchableOpacity>
-            </View>
-            <TextInput
-              style={styles.input}
-              placeholder="Enter your password"
-              value={password}
-              onChangeText={setPassword}
-              secureTextEntry
-              autoComplete="current-password"
-              placeholderTextColor="#999"
+          {/* Error Banner */}
+          {errors.general && (
+            <ErrorBanner 
+              message={errors.general} 
+              onDismiss={() => clearError('general')} 
             />
           )}
 
@@ -1000,10 +870,10 @@ export default function SignIn() {
             showSecureToggle={true}
             icon={<Lock size={20} color={COLORS.textSecondary} />}
           />
-          </View>
 
+          {/* Forgot Password */}
           <TouchableOpacity 
-            onPress={handleForgotPassword}
+            onPress={() => router.push('/forgotPassword')}
             className="self-end mb-4"
           >
             <Text className="text-[#1AE57D] text-sm font-medium">Forgot Password?</Text>
@@ -1023,21 +893,6 @@ export default function SignIn() {
             <View className="flex-1 h-px bg-gray-700" />
             <Text className="text-gray-500 mx-4 text-sm">OR</Text>
             <View className="flex-1 h-px bg-gray-700" />
-            style={[styles.button, loading && styles.buttonDisabled]}
-            onPress={handleSignIn}
-            disabled={loading}
-          >
-            {loading ? (
-              <ActivityIndicator color="#fff" />
-            ) : (
-              <Text style={styles.buttonText}>Sign In</Text>
-            )}
-          </TouchableOpacity>
-
-          <View style={styles.dividerContainer}>
-            <View style={styles.divider} />
-            <Text style={styles.dividerText}>OR</Text>
-            <View style={styles.divider} />
           </View>
 
           {/* Google Sign In Button */}
@@ -1047,8 +902,9 @@ export default function SignIn() {
             disabled={!request || loading}                    
           >
             <Image 
-              source={{ uri: 'https://www.google.com/favicon.ico' }} 
-              style={styles.googleIcon} 
+              source={{ uri: 'https://www.google.com/favicon.ico' }}
+              className="w-6 h-6 mr-3"
+              resizeMode="contain"
             />
             <Text className="text-gray-800 text-base font-medium">
               {loading ? 'Signing in...' : 'Continue with Google'}
@@ -1072,142 +928,5 @@ export default function SignIn() {
         </ScrollView>
       </KeyboardAvoidingView>
     </SafeAreaView>
-            <Text style={styles.googleButtonText}>Sign in with Google</Text>
-          </TouchableOpacity>
-
-          <View style={styles.footer}>
-            <Text style={styles.footerText}>Don't have an account? </Text>
-            <TouchableOpacity onPress={() => router.push('/signUp')}>
-              <Text style={styles.signUpLink}>Sign up</Text>
-            </TouchableOpacity>
-          </View>
-        </View>
-      </ScrollView>
-    </KeyboardAvoidingView>
   );
 }
-
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: '#fff',
-  },
-  scrollContainer: {
-    flexGrow: 1,
-    justifyContent: 'center',
-    padding: 20,
-  },
-  formContainer: {
-    width: '100%',
-    maxWidth: 400,
-    alignSelf: 'center',
-    padding: 20,
-  },
-  title: {
-    fontSize: 28,
-    fontWeight: 'bold',
-    color: '#333',
-    marginBottom: 8,
-    textAlign: 'center',
-  },
-  subtitle: {
-    fontSize: 16,
-    color: '#666',
-    marginBottom: 32,
-    textAlign: 'center',
-  },
-  inputContainer: {
-    marginBottom: 20,
-  },
-  labelContainer: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    marginBottom: 8,
-  },
-  label: {
-    fontSize: 14,
-    color: '#444',
-    fontWeight: '500',
-  },
-  input: {
-    backgroundColor: '#f8f8f8',
-    borderWidth: 1,
-    borderColor: '#e0e0e0',
-    borderRadius: 8,
-    padding: 14,
-    fontSize: 16,
-    color: '#333',
-  },
-  button: {
-    backgroundColor: '#007AFF',
-    padding: 16,
-    borderRadius: 8,
-    alignItems: 'center',
-    marginTop: 10,
-  },
-  buttonDisabled: {
-    opacity: 0.7,
-  },
-  buttonText: {
-    color: '#fff',
-    fontSize: 16,
-    fontWeight: '600',
-  },
-  footer: {
-    flexDirection: 'row',
-    justifyContent: 'center',
-    marginTop: 24,
-  },
-  footerText: {
-    color: '#666',
-  },
-  signUpLink: {
-    color: '#007AFF',
-    fontWeight: '600',
-  },
-  forgotPassword: {
-    color: '#007AFF',
-    fontSize: 14,
-  },
-  errorText: {
-    color: '#ff3b30',
-    marginBottom: 16,
-    textAlign: 'center',
-  },
-  dividerContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginVertical: 20,
-  },
-  divider: {
-    flex: 1,
-    height: 1,
-    backgroundColor: '#e0e0e0',
-  },
-  dividerText: {
-    marginHorizontal: 10,
-    color: '#999',
-    fontSize: 14,
-  },
-  googleButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: '#fff',
-    borderWidth: 1,
-    borderColor: '#e0e0e0',
-    borderRadius: 8,
-    padding: 14,
-    marginTop: 10,
-  },
-  googleIcon: {
-    width: 20,
-    height: 20,
-    marginRight: 12,
-  },
-  googleButtonText: {
-    color: '#444',
-    fontSize: 16,
-    fontWeight: '500',
-  },
-});

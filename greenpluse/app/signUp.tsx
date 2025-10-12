@@ -186,7 +186,7 @@ const SignUpIllustration: React.FC = () => {
         transform: [{ translateY }],
       }}
     >
-      <Svg width="200" height="200" viewBox="0 0 200 200">
+      <Svg width="180" height="180" viewBox="0 0 200 200">
         <Defs>
           <LinearGradient id="grad1" x1="0%" y1="0%" x2="100%" y2="100%">
             <Stop offset="0%" stopColor="#1AE57D" stopOpacity="1" />
@@ -1042,7 +1042,7 @@ export default function RegisterScreen() {
           />
 
           {/* Divider */}
-          <View className="flex-row items-center my-4">
+          <View className="flex-row items-center my-6">
             <View className="flex-1 h-px bg-gray-700" />
             <Text className="mx-4 text-gray-400">or continue with</Text>
             <View className="flex-1 h-px bg-gray-700" />
@@ -1074,7 +1074,7 @@ export default function RegisterScreen() {
           </Text>
 
           {/* Sign In Link */}
-          <View className="flex-row justify-center items-center mt-3">
+          <View className="flex-row justify-center items-center mt-5">
             <Text className="text-gray-400 text-base">
               Already have an account?{' '}
             </Text>
