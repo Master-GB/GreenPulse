@@ -251,7 +251,11 @@ export default function Home() {
               </Text>
             </TouchableOpacity>
 
-            <TouchableOpacity className="w-[31%] bg-[#2a3e3e] rounded-2xl items-center justify-center h-28">
+            <TouchableOpacity 
+            className="w-[31%] bg-[#2a3e3e] rounded-2xl items-center justify-center h-28"
+            onPress={() => router.push('/(root)/RequestProject')} 
+            
+            >
                 <Image source={icons.supportH} className="size-12 mb-1" />
                 <Text className="text-white text-center text-sm">
                     Request Help
@@ -280,7 +284,10 @@ export default function Home() {
                 </Text>
             </TouchableOpacity>
 
-            <TouchableOpacity className="flex-[1.5] bg-[#2a3e3e] rounded-2xl p-4 items-center justify-center h-28">
+            <TouchableOpacity 
+            className="flex-[1.5] bg-[#2a3e3e] rounded-2xl p-4 items-center justify-center h-28"
+            onPress={() => router.push('/(root)/knowledgeHub')} 
+            >
               <Image source={icons.knowdledgeH}  className="size-12 mb-1" />
               <Text className="text-white text-center text-sm">
                 Knowledge Hub
