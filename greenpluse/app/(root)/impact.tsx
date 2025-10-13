@@ -13,7 +13,7 @@ import {
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useRouter, useFocusEffect } from "expo-router";
 import { Globe, Zap, Leaf, Users } from "lucide-react-native";
-import { collection, getDocs, query, where } from "firebase/firestore";
+import { collection, getDocs, query, where, getCountFromServer } from "firebase/firestore";
 import { db } from "../../config/firebaseConfig";
 import { useAuth } from "../../contexts/AuthContext";
 import { LineChart } from "react-native-chart-kit";
@@ -26,6 +26,7 @@ export default function Impact() {
   const router = useRouter();
   const viewShotRef = useRef<ViewShot>(null);
   const { user } = useAuth();
+  const [helpedProjects, setHelpedProjects] = React.useState(0);
   const [donatedEnergy, setDonatedEnergy] = React.useState({
     total: 0,
     currentMonth: 0,
@@ -146,25 +147,157 @@ export default function Impact() {
     }
   }, [user]);
 
-  // Load data on component mount and when screen comes into focus
-  useFocusEffect(
-    React.useCallback(() => {
-      loadImpactData();
-      loadCommunityStories();
-    }, [loadImpactData, loadCommunityStories])
-  );
+  // Load helped projects count for current user
+  const loadHelpedProjects = React.useCallback(async () => {
+    if (!user) {
+      setHelpedProjects(0);
+      return;
+    }
+
+    try {
+      // Get only the current user's project donations
+      const donationsRef = collection(db, 'ProjectDonation');
+      const userDonationsQuery = query(
+        donationsRef, 
+        where('userId', '==', user.uid)  // Assuming there's a 'userId' field in ProjectDonation
+      );
+      
+      try {
+        // First try to get just the count
+        const snapshot = await getCountFromServer(userDonationsQuery);
+        setHelpedProjects(snapshot.data().count || 0);
+      } catch (countError) {
+        console.log('Error getting count, trying full query:', countError);
+        
+        // Fallback: Get all matching documents and count client-side
+        const querySnapshot = await getDocs(userDonationsQuery);
+        setHelpedProjects(querySnapshot.size);
+      }
+    } catch (error) {
+      console.error('Error in loadHelpedProjects:', error);
+      setHelpedProjects(0);
+    }
+  }, [user]);
+
+  // State for CO2 emissions data
+  const [co2Data, setCo2Data] = React.useState({
+    total: 0,
+    changePercentage: 0,
+    previousMonthCoins: 0
+  });
+
+  // Load CO2 data based on user's coins
+  const loadCo2Data = React.useCallback(async () => {
+    try {
+      if (!user) return;
+      
+      // Get user's coin balance from energyRecords
+      const recordsRef = collection(db, 'users', user.uid, 'energyRecords');
+      const snapshot = await getDocs(recordsRef);
+      
+      const now = new Date();
+      const currentMonth = now.getMonth();
+      const currentYear = now.getFullYear();
+      
+      // Initialize arrays to track coins for each of the last 6 months
+      const monthlyCoins = [0, 0, 0, 0, 0, 0];
+      let totalCoins = 0;
+      
+      // Process each energy record
+      snapshot.forEach(doc => {
+        const data = doc.data();
+        if (data.coinValue) {
+          const coinValue = Number(data.coinValue);
+          totalCoins += coinValue;
+          
+          const timestamp = data.timestamp?.toDate ? data.timestamp.toDate() : new Date();
+          const docMonth = timestamp.getMonth();
+          const docYear = timestamp.getFullYear();
+          
+          // Calculate how many months ago this record is from (0 = current month, 1 = previous month, etc.)
+          let monthsAgo = (currentYear - docYear) * 12 + (currentMonth - docMonth);
+          
+          // Only consider records from the last 6 months
+          if (monthsAgo >= 0 && monthsAgo < 6) {
+            monthlyCoins[5 - monthsAgo] += coinValue; // 5 - monthsAgo to put current month at the end
+          }
+        }
+      });
+      
+      // Calculate CO2 avoided (1 coin = 1 kWh, 1 kWh avoids 0.475 kg CO2)
+      const monthlyCO2 = monthlyCoins.map(coins => Math.round(coins * 0.475));
+      const currentMonthCO2 = monthlyCO2[5]; // Last element is current month
+      const previousMonthCO2 = monthlyCO2[4]; // Second to last element is previous month
+      const totalCO2 = totalCoins * 0.475;
+      
+      // Calculate percentage change between current and previous month
+      let changePercentage = 0;
+      if (previousMonthCO2 > 0) {
+        changePercentage = ((currentMonthCO2 - previousMonthCO2) / previousMonthCO2) * 100;
+      } else if (currentMonthCO2 > 0) {
+        changePercentage = 100; // No previous data, but we have current data
+      }
+      
+      setCo2Data({
+        total: totalCO2, // Now using total CO2 instead of just current month
+        changePercentage: Math.round(changePercentage),
+        previousMonthCoins: previousMonthCO2 / 0.475 // Convert back to coins for consistency
+      });
+      
+      // Update chart data
+      setCo2ChartData({
+        labels: getLast6Months(),
+        datasets: [{
+          data: monthlyCO2,
+          strokeWidth: 2,
+        }],
+        legend: ["CO2 Saved (kg)"],
+      });
+      
+    } catch (error) {
+      console.error('Error loading CO2 data:', error);
+    }
+  }, [user]);
 
   // Chart data for CO2 Saved Over Time
-  const co2ChartData = {
+  const [co2ChartData, setCo2ChartData] = React.useState({
     labels: ["Jan", "Feb", "Mar", "Apr", "May", "Jun"],
     datasets: [
       {
-        data: [180, 210, 19, 24, 22, 70],
+        data: [0, 0, 0, 0, 0, 0],
         strokeWidth: 2,
       },
     ],
     legend: ["CO2 Saved (kg)"],
-  };
+  });
+
+  // Load data on component mount and when screen comes into focus
+  useFocusEffect(
+    React.useCallback(() => {
+      let isMounted = true;
+      
+      const loadData = async () => {
+        try {
+          await Promise.all([
+            loadImpactData(),
+            loadCommunityStories(),
+            loadCo2Data(),
+            loadHelpedProjects()
+          ]);
+        } catch (error) {
+          if (isMounted) {
+            console.error('Error loading data:', error);
+          }
+        }
+      };
+      
+      loadData();
+      
+      return () => {
+        isMounted = false;
+      };
+    }, [loadImpactData, loadCommunityStories, loadCo2Data, loadHelpedProjects])
+  );
 
   // Get month names for the last 6 months
   const getLast6Months = () => {
@@ -323,7 +456,7 @@ export default function Impact() {
                   <Text className={`text-sm mt-1 ${donatedEnergy.currentMonth >= donatedEnergy.previousMonth ? 'text-[#1AE57D]' : 'text-red-500'}`}>
                     {donatedEnergy.previousMonth === 0 ? 
                       (donatedEnergy.currentMonth > 0 ? 'New!' : '') : 
-                      `${donatedEnergy.currentMonth >= donatedEnergy.previousMonth ? '+' : '-'}${Math.abs(Math.round(calculatePercentageChange(donatedEnergy.currentMonth, donatedEnergy.previousMonth)))}% from last month`}
+                      `${donatedEnergy.currentMonth >= donatedEnergy.previousMonth ? '+' : '-'}${Math.abs(Math.round(calculatePercentageChange(donatedEnergy.currentMonth, donatedEnergy.previousMonth)))}%`}
                   </Text>
                 )}
               </View>
@@ -333,8 +466,12 @@ export default function Impact() {
                 <Text className="text-gray-300 text-sm mb-1">
                   CO2 Emissions Avoided
                 </Text>
-                <Text className="text-white text-2xl font-bold">2,456 kg</Text>
-                <Text className="text-[#1AE57D] text-sm mt-1">+15%</Text>
+                <Text className="text-white text-2xl font-bold">
+                  {loading ? '...' : `${Math.round(co2Data.total).toLocaleString()} kg`}
+                </Text>
+                <Text className={`${co2Data.changePercentage >= 0 ? 'text-[#1AE57D]' : 'text-red-500'} text-sm mt-1`}>
+                  {co2Data.previousMonthCoins === 0 ? 'New!' : `${co2Data.changePercentage >= 0 ? '+' : ''}${co2Data.changePercentage}%`}
+                </Text>
               </View>
             </View>
 
@@ -345,8 +482,12 @@ export default function Impact() {
                 <Text className="text-gray-300 text-sm mb-1 mt-[-7px]">
                   Helped Project
                 </Text>
-                <Text className="text-white text-2xl font-bold">12</Text>
-                <Text className="text-[#1AE57D] text-sm mt-1">+2%</Text>
+                <Text className="text-white text-2xl font-bold">
+                  {loading ? '...' : helpedProjects.toLocaleString()}
+                </Text>
+                <Text className="text-[#1AE57D] text-sm mt-1">
+                  {!loading && (helpedProjects > 0 ? 'New!' : '')}
+                </Text>
               </View>
 
               {/* Helped Families */}
@@ -361,7 +502,7 @@ export default function Impact() {
                   <Text className={`text-sm mt-1 ${familiesHelped.currentMonth >= familiesHelped.previousMonth ? 'text-[#1AE57D]' : 'text-red-500'}`}>
                     {familiesHelped.previousMonth === 0 ? 
                       (familiesHelped.currentMonth > 0 ? 'New!' : '') : 
-                      `${familiesHelped.currentMonth >= familiesHelped.previousMonth ? '+' : '-'}${Math.abs(Math.round(calculatePercentageChange(familiesHelped.currentMonth, familiesHelped.previousMonth)))}% from last month`}
+                      `${familiesHelped.currentMonth >= familiesHelped.previousMonth ? '+' : '-'}${Math.abs(Math.round(calculatePercentageChange(familiesHelped.currentMonth, familiesHelped.previousMonth)))}%`}
                   </Text>
                 )}
               </View>
@@ -374,9 +515,17 @@ export default function Impact() {
           <Text className="text-white text-lg font-bold mb-1">
             CO₂ Saved Over Time
           </Text>
-          <Text className="text-white text-3xl font-bold mb-1">2,456 kg</Text>
+          <Text className="text-[#1AE57D] text-3xl font-bold mb-1">
+            {loading ? '...' : `${Math.round(co2Data.total).toLocaleString()} kg`}
+          </Text>
           <Text className="text-gray-400 text-sm mb-4">
-            Last 6 Months <Text className="text-[#1AE57D]">+10%</Text>
+            Last 6 Months {co2Data.previousMonthCoins === 0 ? (
+              <Text className="text-[#1AE57D]">New!</Text>
+            ) : (
+              <Text className={co2Data.changePercentage >= 0 ? 'text-[#1AE57D]' : 'text-red-500'}>
+                {co2Data.changePercentage >= 0 ? '+' : ''}{co2Data.changePercentage}%
+              </Text>
+            )}
           </Text>
 
           <View style={{ marginLeft: -34, marginRight: -20 }}>
@@ -453,15 +602,15 @@ export default function Impact() {
           </View>
           <Text className="text-gray-400 text-sm mb-7">
             Last 6 Months {!loading ? (
-              familiesData[0].value > 0 && familiesData[5].value > 0 ? (
-                <Text className={familiesData[5].value >= familiesData[0].value ? 'text-[#1AE57D]' : 'text-red-500'}>
-                  {familiesData[5].value >= familiesData[0].value ? '+' : '-'}
-                  {Math.abs(Math.round(
-                    ((familiesData[5].value - familiesData[0].value) / familiesData[0].value) * 100
-                  ))}%
+              familiesData[4].value > 0 ? (
+                <Text className={familiesData[5].value >= familiesData[4].value ? 'text-[#1AE57D]' : 'text-red-500'}>
+                  {familiesData[5].value >= familiesData[4].value ? '+' : ''}
+                  {Math.round(
+                    ((familiesData[5].value - familiesData[4].value) / familiesData[4].value) * 100
+                  )}%
                 </Text>
               ) : familiesData[5].value > 0 ? (
-                <Text className="text-[#1AE57D]">New!</Text>
+                <Text className="text-[#1AE57D]">+100%</Text>
               ) : null
             ) : '...'}
           </Text>
@@ -654,13 +803,13 @@ export default function Impact() {
             <View className="flex-row flex-wrap gap-3 mb-6">
               <View className="flex-1 bg-[#1a4d3a] rounded-2xl p-4 items-center">
                 <Zap size={24} color="#2ECC71" />
-                <Text className="text-white text-xl font-bold mt-2">1,040 kWh</Text>
+                <Text className="text-white text-xl font-bold mt-2">{donatedEnergy.total.toLocaleString()} kWh</Text>
                 <Text className="text-gray-300 text-xs">Donated Energy</Text>
               </View>
               
               <View className="flex-1 bg-[#1a4d3a] rounded-2xl p-4 items-center">
                 <Leaf size={24} color="#2ECC71" />
-                <Text className="text-white text-xl font-bold mt-2">2,456 kg</Text>
+                <Text className="text-white text-xl font-bold mt-2">{Math.round(co2Data.total).toLocaleString()} kg</Text>
                 <Text className="text-gray-300 text-xs">CO₂ Avoided</Text>
               </View>
             </View>
@@ -668,13 +817,13 @@ export default function Impact() {
             <View className="flex-row flex-wrap gap-3 mb-6">
               <View className="flex-1 bg-[#1a4d3a] rounded-2xl p-4 items-center">
                 <Globe size={24} color="#2ECC71" />
-                <Text className="text-white text-xl font-bold mt-2">12</Text>
+                <Text className="text-white text-xl font-bold mt-2">{helpedProjects.toLocaleString()}</Text>
                 <Text className="text-gray-300 text-xs">Projects Helped</Text>
               </View>
               
               <View className="flex-1 bg-[#1a4d3a] rounded-2xl p-4 items-center">
                 <Users size={24} color="#2ECC71" />
-                <Text className="text-white text-xl font-bold mt-2">18</Text>
+                <Text className="text-white text-xl font-bold mt-2">{familiesHelped.total.toLocaleString()}</Text>
                 <Text className="text-gray-300 text-xs">Families Helped</Text>
               </View>
             </View>

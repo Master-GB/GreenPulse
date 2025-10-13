@@ -7,6 +7,7 @@ import { db, auth } from '@/config/firebaseConfig';
 import { collection, addDoc, serverTimestamp, doc, getDoc, updateDoc } from 'firebase/firestore';
 import * as ImagePicker from 'expo-image-picker';
 import * as DocumentPicker from 'expo-document-picker';
+import { LocationPickerModal } from '@/components/LocationPickerModal';
 
 const RequestProject = () => {
   const router = useRouter();
@@ -18,6 +19,8 @@ const RequestProject = () => {
   const [isLoading, setIsLoading] = useState(false);
   const [showPropertyDropdown, setShowPropertyDropdown] = useState(false);
   const [showEnergyDropdown, setShowEnergyDropdown] = useState(false);
+  const [showLocationPicker, setShowLocationPicker] = useState(false);
+  const [selectedLocation, setSelectedLocation] = useState<{ latitude: number; longitude: number } | undefined>();
   const [uploadedFiles, setUploadedFiles] = useState({
     idDocument: null as string | null,
     landDocument: null as string | null,
@@ -78,6 +81,14 @@ const RequestProject = () => {
             verification: true
           }
         });
+        
+        // Load saved coordinates if available
+        if (data.latitude && data.longitude) {
+          setSelectedLocation({
+            latitude: data.latitude,
+            longitude: data.longitude
+          });
+        }
       } else {
         Alert.alert('Error', 'Project not found');
         router.back();
@@ -153,8 +164,12 @@ const RequestProject = () => {
   };
 
   const handleLocationPick = () => {
-    Alert.alert('Location', 'Map location picker will be implemented');
-    // TODO: Implement with expo-location and map
+    setShowLocationPicker(true);
+  };
+
+  const handleSelectLocation = (location: string, coordinates?: { latitude: number; longitude: number }) => {
+    setFormData({ ...formData, address: location });
+    setSelectedLocation(coordinates);
   };
 
   const validateForm = () => {
@@ -214,6 +229,9 @@ const RequestProject = () => {
         phoneNumber: formData.phoneNumber,
         email: formData.email,
         address: formData.address,
+        location: formData.address,
+        latitude: selectedLocation?.latitude || null,
+        longitude: selectedLocation?.longitude || null,
         landReference: formData.landReference,
         propertyType: formData.propertyType,
         projectTitle: formData.projectTitle,
@@ -1116,6 +1134,14 @@ const RequestProject = () => {
           )}
         </TouchableOpacity>
       </View>
+
+      {/* Location Picker Modal */}
+      <LocationPickerModal
+        visible={showLocationPicker}
+        onClose={() => setShowLocationPicker(false)}
+        onSelectLocation={handleSelectLocation}
+        currentLocation={formData.address}
+      />
     </SafeAreaView>
   );
 };

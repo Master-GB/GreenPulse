@@ -5,23 +5,29 @@
     "version": "1.0.0",
     "orientation": "portrait",
     "backgroundColor": "#122119",
-    "icon": "./assets/images/GreenPluseLogoT.png",
+    "icon": "./assets/images/GreenPluseLogo.png",
     "scheme": "greenpluse",
     "userInterfaceStyle": "automatic",
     "newArchEnabled": true,
-    "ios": {
-      "supportsTablet": true
-    },
     "android": {
       "adaptiveIcon": {
         "backgroundColor": "#122119",
-        "foregroundImage": "./assets/images/GreenPluseLogoT.png",
-        "backgroundImage": "./assets/images/GreenPluseLogoT.png",
-        "monochromeImage": "./assets/images/GreenPluseLogoT.png"
+        "foregroundImage": "./assets/images/GreenPluseLogo.png",
+        "backgroundImage": "./assets/images/GreenPluseLogo.png",
+        "monochromeImage": "./assets/images/GreenPluseLogo.png"
       },
       "edgeToEdgeEnabled": true,
       "predictiveBackGestureEnabled": false,
-      "package": "com.anonymous.GreenPluse"
+      "package": "com.anonymous.GreenPluse",
+      "permissions": [
+        "android.permission.READ_EXTERNAL_STORAGE",
+        "android.permission.WRITE_EXTERNAL_STORAGE",
+        "android.permission.READ_MEDIA_VISUAL_USER_SELECTED",
+        "android.permission.ACCESS_MEDIA_LOCATION",
+        "android.permission.READ_MEDIA_IMAGES",
+        "android.permission.READ_MEDIA_VIDEO",
+        "android.permission.READ_MEDIA_AUDIO"
+      ]
     },
     "web": {
       "output": "static",
@@ -40,11 +46,26 @@
             "backgroundColor": "#000000"
           }
         }
+      ],
+      "expo-web-browser",
+      [
+        "expo-media-library",
+        {
+          "photosPermission": "Allow GreenPulse to save your NFT certificates to your photo library.",
+          "savePhotosPermission": "Allow GreenPulse to save your NFT certificates.",
+          "isAccessMediaLocationEnabled": true
+        }
       ]
     ],
     "experiments": {
       "typedRoutes": true,
       "reactCompiler": true
+    },
+    "extra": {
+      "router": {},
+      "eas": {
+        "projectId": "876d7d3a-aad8-4036-9094-4bc5c739fca6"
+      }
     }
   }
 }
