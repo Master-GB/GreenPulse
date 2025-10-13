@@ -5,16 +5,16 @@
     "version": "1.0.0",
     "orientation": "portrait",
     "backgroundColor": "#122119",
-    "icon": "./assets/images/GreenPluseLogoT.png",
+    "icon": "./assets/images/GreenPluseLogo.png",
     "scheme": "greenpluse",
     "userInterfaceStyle": "automatic",
     "newArchEnabled": true,
     "android": {
       "adaptiveIcon": {
         "backgroundColor": "#122119",
-        "foregroundImage": "./assets/images/GreenPluseLogoT.png",
-        "backgroundImage": "./assets/images/GreenPluseLogoT.png",
-        "monochromeImage": "./assets/images/GreenPluseLogoT.png"
+        "foregroundImage": "./assets/images/GreenPluseLogo.png",
+        "backgroundImage": "./assets/images/GreenPluseLogo.png",
+        "monochromeImage": "./assets/images/GreenPluseLogo.png"
       },
       "edgeToEdgeEnabled": true,
       "predictiveBackGestureEnabled": false,
