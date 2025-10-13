@@ -425,7 +425,7 @@ export default function ForgotPassword() {
         showsVerticalScrollIndicator={false}
       >
         {/* Header moved to top */}
-        <View className="flex-row mt-6 items-center mb-2">
+        <View className="flex-row  mt-[-18px] items-center mb-2">
           <TouchableOpacity
             onPress={() => router.back()}
             className="mr-3 p-2 mt-5"
@@ -442,7 +442,7 @@ export default function ForgotPassword() {
           <AnimatedForgotPasswordImage />
         </View>
 
-        <View className="w-full px-3 self-center mt-16 ">
+        <View className="w-full px-3 self-center mt-5 ">
           <Text className="text-sm text-[#9CA3AF] mb-8 px-3 leading-5">
             Enter your email and we'll send you a link to reset your password.
           </Text>
