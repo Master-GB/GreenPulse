@@ -9,6 +9,7 @@ import {
   signInWithCredential
 } from 'firebase/auth';
 import { auth } from '../config/firebaseConfig';
+// @ts-ignore - expo auth session providers ship without type declarations
 import * as Google from 'expo-auth-session/providers/google';
 import * as WebBrowser from 'expo-web-browser';
 
@@ -21,6 +22,7 @@ interface AuthContextType {
   signIn: (email: string, password: string) => Promise<void>;
   signUp: (email: string, password: string) => Promise<void>;
   signOut: () => Promise<void>;
+  logOut: () => Promise<void>;
   signInWithGoogle: () => Promise<void>;
   authError: string | null;
 }
@@ -111,6 +113,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
   };
 
+  const logOut = async () => {
+    await signOut();
+  };
+
   const signInWithGoogle = async () => {
     try {
       await promptAsync();
@@ -127,6 +133,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     signIn,
     signUp,
     signOut,
+    logOut,
     signInWithGoogle,
     authError
   };

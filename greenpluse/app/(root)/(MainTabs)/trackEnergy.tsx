@@ -44,6 +44,7 @@ export default function TrackEnergy() {
   const [monthlyAverageUsage, setMonthlyAverageUsage] = useState(0)
   const [usageComponents, setUsageComponents] = useState<ComponentStat[]>([])
   const [usageBarChart, setUsageBarChart] = useState(createUsageBarChartFallback)
+  const [coinSources, setCoinSources] = useState<ComponentStat[]>([])
 
   // FIX: Replace useEffect with useFocusEffect
   useFocusEffect(
@@ -58,12 +59,17 @@ export default function TrackEnergy() {
         setUsageBarChart(createUsageBarChartFallback())
       }
 
+      const resetCoinState = () => {
+        setAvailableCoins(0)
+        setTotalCoinsGenerated(0)
+        setCoinLineChart(DEFAULT_LINE_CHART)
+        setCoinSources([])
+      }
+
       const fetchCoinData = async () => {
         if (!user) {
           if (isMounted) {
-            setAvailableCoins(0)
-            setTotalCoinsGenerated(0)
-            setCoinLineChart(DEFAULT_LINE_CHART)
+            resetCoinState()
             resetUsageState()
           }
           return
@@ -75,11 +81,17 @@ export default function TrackEnergy() {
 
           let runningTotal = 0
           const monthlyTotals = new Map<string, number>()
+          const sourceTotals = new Map<string, number>()
 
           snapshot.forEach((docSnapshot) => {
             const data = docSnapshot.data()
             const coins = Number(data.coinValue) || 0
             runningTotal += coins
+
+            const sourceName = (data.device || data.source || 'General source').trim()
+            if (sourceName.length > 0) {
+              sourceTotals.set(sourceName, (sourceTotals.get(sourceName) || 0) + coins)
+            }
 
             const recordedAt = data.recordedAt?.toDate?.()
               || data.timestamp?.toDate?.()
@@ -95,6 +107,19 @@ export default function TrackEnergy() {
             const roundedTotal = Math.round(runningTotal)
             setAvailableCoins(roundedTotal)
             setTotalCoinsGenerated(roundedTotal)
+
+            const topSources = Array.from(sourceTotals.entries()).sort((a, b) => b[1] - a[1]).slice(0, 3)
+            const sources = topSources.map(([name, value], index) => ({
+              name: name.length > 0 ? name : `Source ${index + 1}`,
+              pct: runningTotal > 0 ? Math.min(1, value / runningTotal) : 0,
+            }))
+
+            while (sources.length < 3) {
+              const index = sources.length + 1
+              sources.push({ name: `Source ${index}`, pct: 0 })
+            }
+
+            setCoinSources(sources)
 
             if (monthlyTotals.size > 0) {
               const sortedKeys = Array.from(monthlyTotals.keys()).sort()
@@ -113,9 +138,7 @@ export default function TrackEnergy() {
         } catch (error) {
           console.error('Error fetching coin data:', error)
           if (isMounted) {
-            setAvailableCoins(0)
-            setTotalCoinsGenerated(0)
-            setCoinLineChart(DEFAULT_LINE_CHART)
+            resetCoinState()
           }
         }
       }
@@ -221,8 +244,9 @@ export default function TrackEnergy() {
 
     totalCoinsGenerated,
     lineChartData: coinLineChart,
-    renewableSources: usageComponents.length ? usageComponents : DEFAULT_COMPONENTS,
-  }), [availableCoins, coinLineChart, monthlyAverageUsage, totalCoinsGenerated, totalUsage, usageBarChart, usageComponents, usedThisMonth])
+    coinBreakdown: coinSources.length ? coinSources : DEFAULT_COMPONENTS,
+  }), [availableCoins, coinLineChart, coinSources, monthlyAverageUsage, totalCoinsGenerated, totalUsage, usageBarChart, usageComponents, usedThisMonth])
+
 
   return (
     <ScrollView className="flex-1 bg-[#122119] px-6 w-full" contentContainerStyle={{ paddingBottom: 48 }}>
@@ -385,9 +409,9 @@ export default function TrackEnergy() {
         />
       </View>
 
-      {/* Renewable sources progress */}
+      {/* Coin generation breakdown */}
       <View className="mb-10">
-        {dummyData.renewableSources.map((r) => (
+        {dummyData.coinBreakdown.map((r: ComponentStat) => (
           <View key={r.name} className="flex-row items-center justify-between mb-4">
             <Text className="text-white text-base">{r.name}</Text>
             <View className="w-1/2 h-8 rounded-full border" style={{ borderColor: '#2b6b66', padding: 4 }}>

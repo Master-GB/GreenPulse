@@ -155,6 +155,22 @@ export default function RootLayout() {
         <Stack.Screen name="addRecord" options={{ headerShown: false }} />
 
         <Stack.Screen
+          name="addUsage"
+          options={{
+            headerShown: true,
+            headerTitle: () => <AppHeader title="" />,
+            headerTintColor: "#fff",
+            headerStyle: {
+              backgroundColor: "#122119",
+            },
+            headerShadowVisible: false,
+            headerBackground: () => (
+              <View style={{ flex: 1, backgroundColor: "#122119" }} />
+            ),
+          }}
+        />
+
+        <Stack.Screen
           name="impact"
           options={{
             headerShown: true,
