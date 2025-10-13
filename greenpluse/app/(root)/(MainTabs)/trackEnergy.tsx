@@ -264,18 +264,18 @@ export default function TrackEnergy() {
           <View className="items-center">
             <View className="flex-row gap-3">
               <TouchableOpacity
-                onPress={() => router.push('/(root)/addRecord')}
-                className="bg-[#13f07a] px-4 py-3 rounded-full"
-                style={{ width: BUTTON_WIDTH, alignItems: 'center' }}
-              >
-                <Text className="text-black font-semibold">Add coin</Text>
-              </TouchableOpacity>
-              <TouchableOpacity
                 onPress={() => router.push('/(root)/addUsage')}
                 className="bg-[#13f07a] px-4 py-3 rounded-full"
                 style={{ width: BUTTON_WIDTH, alignItems: 'center' }}
               >
                 <Text className="text-black font-semibold">Add usage</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                onPress={() => router.push('/(root)/addRecord')}
+                className="bg-[#13f07a] px-4 py-3 rounded-full"
+                style={{ width: BUTTON_WIDTH, alignItems: 'center' }}
+              >
+                <Text className="text-black font-semibold">Add coin</Text>
               </TouchableOpacity>
             </View>
           </View>

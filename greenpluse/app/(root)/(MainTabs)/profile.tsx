@@ -7,7 +7,7 @@ import { useRouter } from 'expo-router';
 import { icons } from '@/constants/icons';
 import { auth, db } from '@/config/firebaseConfig';
 import { doc, getDoc, collection, query, where, getDocs } from 'firebase/firestore';
-import { signOut } from 'firebase/auth';
+import { useAuth } from '@/contexts/AuthContext';
 
 interface UserProfile {
   name: string;
@@ -23,6 +23,7 @@ interface UserProfile {
 
 const Profile = () => {
   const router = useRouter();
+  const { logOut } = useAuth();
   const [profile, setProfile] = useState<UserProfile | null>(null);
   const [loading, setLoading] = useState(true);
 
@@ -126,7 +127,7 @@ const Profile = () => {
         style: 'destructive',
         onPress: async () => {
           try {
-            await signOut(auth);
+            await logOut();
             router.replace('/signIn' as any);
           } catch (error) {
             console.error('Logout error:', error);

@@ -7,9 +7,9 @@ import {
   StatusBar,
   Alert,
 } from "react-native";
-import React, { useState, useEffect } from "react";
+import React, { useState, useCallback } from "react";
 import { ArrowLeft, Edit, Trash2, Info } from "lucide-react-native";
-import { useRouter } from "expo-router";
+import { useRouter, useFocusEffect } from "expo-router";
 import { collection, getDocs, deleteDoc, doc } from 'firebase/firestore';
 import { db } from '../../config/firebaseConfig';
 import { useAuth } from '../../contexts/AuthContext';
@@ -37,45 +37,48 @@ const RecordHistory = () => {
   const [loading, setLoading] = useState(true);
 
   // Fetch records from Firebase
-  useEffect(() => {
-    const fetchRecords = async () => {
-      if (!user) {
-        setLoading(false);
-        return;
-      }
+  const fetchRecords = useCallback(async () => {
+    if (!user) {
+      setRecords([]);
+      setLoading(false);
+      return;
+    }
 
-      try {
-  const recordsRef = collection(db, 'users', user.uid, 'energyRecords');
-  const querySnapshot = await getDocs(recordsRef);
-        
-        const fetchedRecords: EnergyRecord[] = [];
-        querySnapshot.forEach((doc) => {
-          const data = doc.data();
-          const timestampValue = data.timestamp?.toDate ? data.timestamp.toDate() : new Date();
-          fetchedRecords.push({
-            id: doc.id,
-            userId: data.userId,
-            kwhValue: data.kwhValue,
-            period: data.period,
-            recordedAtString: data.recordedAtString ?? data.recordedAt?.toDate?.().toLocaleString?.() ?? "",
-            device: data.device,
-            timestamp: timestampValue,
-          });
+    try {
+      const recordsRef = collection(db, 'users', user.uid, 'energyRecords');
+      const querySnapshot = await getDocs(recordsRef);
+
+      const fetchedRecords: EnergyRecord[] = [];
+      querySnapshot.forEach((docSnapshot) => {
+        const data = docSnapshot.data();
+        const timestampValue = data.timestamp?.toDate ? data.timestamp.toDate() : new Date();
+        fetchedRecords.push({
+          id: docSnapshot.id,
+          userId: data.userId,
+          kwhValue: data.kwhValue,
+          period: data.period,
+          recordedAtString: data.recordedAtString ?? data.recordedAt?.toDate?.().toLocaleString?.() ?? "",
+          device: data.device,
+          timestamp: timestampValue,
         });
+      });
 
-        // Sort by timestamp (newest first)
-        fetchedRecords.sort((a, b) => b.timestamp.getTime() - a.timestamp.getTime());
-        setRecords(fetchedRecords);
-      } catch (error) {
-        console.error('Error fetching records:', error);
-        Alert.alert('Error', 'Failed to load records');
-      } finally {
-        setLoading(false);
-      }
-    };
-
-    fetchRecords();
+      fetchedRecords.sort((a, b) => b.timestamp.getTime() - a.timestamp.getTime());
+      setRecords(fetchedRecords);
+    } catch (error) {
+      console.error('Error fetching records:', error);
+      Alert.alert('Error', 'Failed to load records');
+    } finally {
+      setLoading(false);
+    }
   }, [user]);
+
+  useFocusEffect(
+    useCallback(() => {
+      setLoading(true);
+      fetchRecords();
+    }, [fetchRecords])
+  );
 
   const handleDelete = async (id: string, kwhValue: number) => {
     Alert.alert(
@@ -123,8 +126,10 @@ const RecordHistory = () => {
         {
           text: "Open Editor",
           onPress: () => {
-            // This will navigate to editRecord screen
-            // router.push(`/(root)/editRecord?recordId=${record.id}`);
+            router.push({
+              pathname: "/(root)/editRecord",
+              params: { recordId: record.id },
+            });
           },
         },
       ]
